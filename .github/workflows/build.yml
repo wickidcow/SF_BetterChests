@@ -2,8 +2,13 @@ name: Build
 
 on:
   push:
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -17,7 +22,35 @@ jobs:
           cache: maven
       - name: Build jar
         run: mvn --batch-mode --update-snapshots clean package
-      - uses: actions/upload-artifact@v4
+
+      - name: Stage SF_BetterChests.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          JAR="$(find target -maxdepth 1 -type f -name 'BetterChests-Albion-*.jar' ! -name 'original-*' -print -quit)"
+          test -n "$JAR"
+          cp "$JAR" dist/SF_BetterChests.jar
+          test -s dist/SF_BetterChests.jar
+          sha256sum dist/SF_BetterChests.jar
+
+      - name: Upload SF_BetterChests.jar
+        uses: actions/upload-artifact@v4
         with:
-          name: BetterChests-Albion-2.0.8-26.2
-          path: target/BetterChests-Albion-*.jar
+          name: SF_BetterChests
+          path: dist/SF_BetterChests.jar
+          if-no-files-found: error
+
+      - name: Publish direct JAR release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          JAR="dist/SF_BetterChests.jar"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$JAR" --clobber
+          else
+            gh release create "$TAG" "$JAR" --generate-notes --title "BetterChests $TAG"
+          fi
