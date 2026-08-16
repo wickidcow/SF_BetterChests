@@ -21,6 +21,11 @@
     </properties>
 
     <repositories>
+        <!-- Resolve normal Maven libraries from Central before aggregate plugin repositories. -->
+        <repository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
