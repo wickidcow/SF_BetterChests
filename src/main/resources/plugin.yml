@@ -1,9 +1,9 @@
 name: BetterChests
 version: '${project.version}'
 main: me.mmmjjkx.betterChests.BetterChests
-api-version: '26.2'
+api-version: '1.21.11'
 depend: [Slimefun]
 softdepend: [SlimeHUD]
 authors: [mmmjjkx, AlbionMC]
-description: Restart-safe bulk drawers and expanded Slimefun storage for Paper 26.2.
-website: https://github.com/wickidcow/BetterChests
+description: Restart-safe bulk drawers and expanded Slimefun storage for Paper 1.21.11+.
+website: https://github.com/wickidcow/SF_BetterChests
