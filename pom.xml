@@ -10,12 +10,16 @@
     <packaging>jar</packaging>
 
     <name>BetterChests Albion Fork</name>
-    <description>Java 25 / Paper 26.2 modernization of SfBetterChests.</description>
+    <description>Java 21 bytecode / Paper 1.21.11+ modernization of SfBetterChests.</description>
 
     <properties>
-        <maven.compiler.release>25</maven.compiler.release>
+        <!-- Build on Java 25, but emit Java 21 bytecode so the same JAR can run on
+             Paper 1.21.11 (Java 21+) as well as Paper 26.1/26.2 (Java 25). -->
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>26.2.build.62-beta</paper.version>
+        <!-- Compile against the oldest supported Paper API. This prevents accidental
+             linkage to methods introduced only in the newer 26.x API. -->
+        <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
         <slimefun.version>RC-37</slimefun.version>
         <slimehud.version>v1.2.7</slimehud.version>
     </properties>
@@ -83,7 +87,7 @@
                 <version>3.6.2</version>
                 <executions>
                     <execution>
-                        <id>require-java-25</id>
+                        <id>require-java-25-build-jdk</id>
                         <goals><goal>enforce</goal></goals>
                         <configuration>
                             <rules>
