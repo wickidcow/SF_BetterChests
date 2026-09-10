@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: Build jar
+      - name: Build jar against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
 
       - name: Stage versioned JAR
@@ -40,6 +40,19 @@ jobs:
           cp "$JAR" "$OUTPUT"
           test -s "$OUTPUT"
           sha256sum "$OUTPUT"
+
+      - name: Verify 1.21.11 compatibility artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="dist/${OUTPUT_NAME}"
+          unzip -p "$JAR" plugin.yml | tee /tmp/betterchests-plugin.yml
+          grep -F "name: BetterChests" /tmp/betterchests-plugin.yml
+          grep -F "api-version: '1.21.11'" /tmp/betterchests-plugin.yml
+
+          echo "Verifying Java 21 bytecode"
+          javap -verbose -classpath "$JAR" me.mmmjjkx.betterChests.BetterChests \
+            | grep -F "major version: 65"
 
       - name: Upload raw JAR artifact
         uses: actions/upload-artifact@v7
