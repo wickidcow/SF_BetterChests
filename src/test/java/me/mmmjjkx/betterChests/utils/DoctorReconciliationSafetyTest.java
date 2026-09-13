@@ -45,6 +45,25 @@ class DoctorReconciliationSafetyTest {
     }
 
     @Test
+    void ieStorageInspectionIsReadOnlyAndNeverNormalizesUnknownState() throws IOException {
+        String doctor = source("src/main/java/me/mmmjjkx/betterChests/diagnostics/BetterChestsDoctor.java");
+        String inspector = source("src/main/java/me/mmmjjkx/betterChests/diagnostics/IEStorageDoctorInspector.java");
+
+        assertTrue(doctor.contains("slimefunItem instanceof IEStorageUnit unit"));
+        assertTrue(doctor.contains("IEStorageDoctorInspector.inspect(block, unit)"));
+        assertTrue(inspector.contains("String STORED_AMOUNT = \"stored\""));
+        assertTrue(inspector.contains("amount > unit.getCapacity()"));
+        assertTrue(inspector.contains("MALFORMED_COUNT"));
+        assertTrue(inspector.contains("NEGATIVE_COUNT"));
+        assertTrue(inspector.contains("OVER_CAPACITY"));
+        assertTrue(inspector.contains("MISSING_DISPLAY_WITH_OUTPUT_EVIDENCE"));
+        assertTrue(inspector.contains("ZERO_COUNT_WITH_DISPLAY"));
+        assertFalse(inspector.contains("BlockStorage.addBlockInfo"));
+        assertFalse(inspector.contains("replaceExistingItem"));
+        assertFalse(inspector.contains("setAmount("));
+    }
+
+    @Test
     void legacyDoctorBridgeRemainsOptionalAndReflective() throws IOException {
         String bridge = source("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java");
         String plugin = source("src/main/java/me/mmmjjkx/betterChests/BetterChests.java");
