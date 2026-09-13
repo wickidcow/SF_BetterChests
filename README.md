@@ -5,7 +5,7 @@
 **High-capacity drawers and portable storage, preserved for modern Slimefun servers.**
 
 ![Slimefun Legacy](https://img.shields.io/badge/Slimefun-Legacy-6bd425?style=for-the-badge)
-![Paper 26.2](https://img.shields.io/badge/Paper-26.2-blue?style=for-the-badge)
+![Paper 1.21.11–26.2](https://img.shields.io/badge/Paper-1.21.11--26.2-blue?style=for-the-badge)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 ![Maintained for AlbionMC.com](https://img.shields.io/badge/Maintained%20for-albionmc.com-7b68ee?style=for-the-badge)
 
@@ -33,6 +33,8 @@ This fork modernizes the old SfBetterChests code for current Paper and Slimefun 
 
 Notable maintenance work includes:
 
+- Paper 1.21.11 API baseline with release smoke tests on Paper 1.21.11 and Paper 26.2;
+- Java 21 bytecode built with the current Java 25 toolchain;
 - persistent drawer contents through Slimefun block data;
 - migration/recovery support for older Dev-16 drawer metadata and display entities;
 - portable drawer contents stored safely in item persistent data;

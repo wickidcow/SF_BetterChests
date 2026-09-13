@@ -13,12 +13,15 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.0"
-  OUTPUT_NAME: "SF_BetterChests1.0.0.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.1"
+  OUTPUT_NAME: "SF_BetterChests1.0.1.jar"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      output_name: ${{ steps.jar-meta.outputs.output_name }}
+      handoff_name: ${{ steps.jar-meta.outputs.handoff_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -26,10 +29,12 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+
       - name: Build jar against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
 
       - name: Stage versioned JAR
+        id: jar-meta
         shell: bash
         run: |
           set -euo pipefail
@@ -37,9 +42,12 @@ jobs:
           JAR="$(find target -maxdepth 1 -type f -name 'BetterChests-Albion-*.jar' ! -name 'original-*' -print -quit)"
           test -n "$JAR"
           OUTPUT="dist/${OUTPUT_NAME}"
+          HANDOFF_NAME="betterchests-ci-${GITHUB_SHA}"
           cp "$JAR" "$OUTPUT"
           test -s "$OUTPUT"
           sha256sum "$OUTPUT"
+          echo "output_name=${OUTPUT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "handoff_name=${HANDOFF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Verify 1.21.11 compatibility artifact
         shell: bash
@@ -61,8 +69,132 @@ jobs:
           archive: false
           if-no-files-found: error
 
+      - name: Upload CI handoff artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.jar-meta.outputs.handoff_name }}
+          path: dist/${{ env.OUTPUT_NAME }}
+          if-no-files-found: error
+
+  runtime-test:
+    name: Paper ${{ matrix.paper_version }} + Slimefun Legacy Runtime Smoke
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        paper_version:
+          - '1.21.11'
+          - '26.2'
+
+    steps:
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download validated BetterChests JAR
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.build.outputs.handoff_name }}
+          path: server/plugins
+
+      - name: Verify downloaded plugin JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_NAME='${{ needs.build.outputs.output_name }}'
+          test -s "server/plugins/$OUTPUT_NAME"
+          unzip -tqq "server/plugins/$OUTPUT_NAME"
+
+      - name: Download stable Paper and Slimefun Legacy
+        shell: bash
+        env:
+          PAPER_VERSION: ${{ matrix.paper_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p server/plugins
+
+          USER_AGENT='SF_BetterChests-CI (github.com/wickidcow/SF_BetterChests)'
+          PAPER_BUILDS=$(curl -fsSL -H "User-Agent: ${USER_AGENT}" \
+            "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
+          PAPER_URL=$(echo "${PAPER_BUILDS}" | jq -r 'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
+          if [ -z "${PAPER_URL}" ]; then
+            echo "No stable Paper ${PAPER_VERSION} build was returned by the PaperMC Fill API." >&2
+            exit 1
+          fi
+          curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/paper.jar "${PAPER_URL}"
+
+          SFL_RELEASE=$(curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            -H "User-Agent: ${USER_AGENT}" \
+            https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
+          SFL_URL=$(echo "${SFL_RELEASE}" | jq -r '.assets[] | select(.name | startswith("Slimefun-Legacy") and endswith(".jar")) | .browser_download_url' | head -n 1)
+          if [ -z "${SFL_URL}" ] || [ "${SFL_URL}" = 'null' ]; then
+            echo 'Could not resolve the latest Slimefun Legacy JAR asset.' >&2
+            exit 1
+          fi
+          curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/plugins/Slimefun.jar "${SFL_URL}"
+
+      - name: Start Paper and verify plugin enable
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd server
+          echo 'eula=true' > eula.txt
+
+          java -Xms512M -Xmx1G -jar paper.jar --nogui > console.log 2>&1 &
+          SERVER_PID=$!
+          cleanup() {
+            kill "${SERVER_PID}" 2>/dev/null || true
+            wait "${SERVER_PID}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          READY=0
+          for _ in $(seq 1 120); do
+            if grep -q 'Done (' console.log 2>/dev/null; then
+              READY=1
+              break
+            fi
+            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat console.log
+
+          if [ "${READY}" -ne 1 ]; then
+            echo 'Paper did not reach a successful startup state.' >&2
+            exit 1
+          fi
+
+          if grep -Eiq "Unsupported API version|Error occurred while enabling BetterChests|Could not load.*BetterChests|NoClassDefFoundError.*betterChests|NoSuchMethodError.*betterChests" console.log; then
+            echo 'BetterChests reported an API/runtime linkage or enable failure.' >&2
+            exit 1
+          fi
+
+          if ! grep -q 'BetterChests' console.log; then
+            echo 'BetterChests did not appear in the Paper startup log.' >&2
+            exit 1
+          fi
+
+  release:
+    name: Publish validated raw JAR release asset
+    needs: [build, runtime-test]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download validated JAR
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.build.outputs.handoff_name }}
+          path: dist
+
       - name: Publish raw JAR release asset
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -74,8 +206,11 @@ jobs:
             TAG="v${LEGACY_ARTIFACT_VERSION}"
           fi
           JAR="dist/${OUTPUT_NAME}"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$JAR" --clobber
+          test -s "$JAR"
+          unzip -tqq "$JAR"
+          sha256sum "$JAR"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --generate-notes --title "SF_BetterChests $TAG"
+            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes --title "SF_BetterChests $TAG"
           fi
