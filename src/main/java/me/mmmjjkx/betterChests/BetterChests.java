@@ -1,6 +1,7 @@
 package me.mmmjjkx.betterChests;
 
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
+import me.mmmjjkx.betterChests.diagnostics.LegacyDoctorBridge;
 import me.mmmjjkx.betterChests.integrations.SlimeHudIntegration;
 import me.mmmjjkx.betterChests.items.BCItems;
 import me.mmmjjkx.betterChests.listeners.DrawerFixListener;
@@ -27,6 +28,7 @@ public final class BetterChests extends JavaPlugin implements SlimefunAddon {
         BCItems.registerItems();
         getServer().getPluginManager().registerEvents(new DrawerFixListener(), this);
         getServer().getPluginManager().registerEvents(new LegacyItemTextListener(), this);
+        LegacyDoctorBridge.register(this);
 
         if (getServer().getPluginManager().isPluginEnabled("SlimeHUD")) {
             try {
@@ -43,6 +45,7 @@ public final class BetterChests extends JavaPlugin implements SlimefunAddon {
 
     @Override
     public void onDisable() {
+        LegacyDoctorBridge.unregister(this);
         getLogger().info("BetterChests Albion fork disabled.");
     }
 
