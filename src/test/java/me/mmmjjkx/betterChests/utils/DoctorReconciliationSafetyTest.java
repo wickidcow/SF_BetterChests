@@ -64,6 +64,31 @@ class DoctorReconciliationSafetyTest {
     }
 
     @Test
+    void unsafeIeStorageIsFrozenBeforeTickerCargoOrBreakCanRewriteIt() throws IOException {
+        String cache = source("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageCache.java");
+        String unit = source("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageUnit.java");
+
+        assertTrue(cache.contains("boolean persistentStateSafe = true"));
+        assertTrue(cache.contains("markPersistentStateUnsafe(\"stored count is malformed"));
+        assertTrue(cache.contains("markPersistentStateUnsafe(\"stored count is negative"));
+        assertTrue(cache.contains("exceeds capacity"));
+        assertTrue(cache.contains("if (!persistentStateSafe) {\n            return;\n        }\n\n        // input output"));
+        assertTrue(cache.contains("return persistentStateSafe && this.amount == 0;"));
+        assertTrue(cache.contains("recoveredIdentity = output.clone()"));
+        assertTrue(cache.contains("the output stack was left untouched"));
+        assertFalse(cache.contains("menu.replaceExistingItem(OUTPUT_SLOT, null)"));
+
+        int unsafeGuard = unit.indexOf("if (!cache.isPersistentStateSafe())");
+        int removeCache = unit.indexOf("caches.remove(menu.getLocation())", unsafeGuard);
+        int dropMenu = unit.indexOf("menu.dropItems(menu.getLocation(), INPUT_SLOT, OUTPUT_SLOT)", unsafeGuard);
+        assertTrue(unsafeGuard >= 0);
+        assertTrue(removeCache > unsafeGuard);
+        assertTrue(dropMenu > removeCache);
+        assertTrue(unit.substring(unsafeGuard, removeCache).contains("e.setCancelled(true)"));
+        assertTrue(unit.substring(unsafeGuard, removeCache).contains("return;"));
+    }
+
+    @Test
     void legacyDoctorBridgeRemainsOptionalAndReflective() throws IOException {
         String bridge = source("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java");
         String plugin = source("src/main/java/me/mmmjjkx/betterChests/BetterChests.java");
