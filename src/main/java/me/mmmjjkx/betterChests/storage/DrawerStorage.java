@@ -41,35 +41,92 @@ public final class DrawerStorage {
     private DrawerStorage() {
     }
 
+    /**
+     * Reads drawer contents without destroying malformed or not-yet-recoverable legacy evidence.
+     * Recoverable Dev-16 state is still upgraded lazily, but unresolved legacy state and corrupt
+     * v2 records are left untouched for Doctor/manual recovery.
+     */
     public static DrawerData read(Block block) {
+        Inspection inspection = inspect(block);
+        if (inspection.status() == Status.LEGACY_RECOVERABLE) {
+            write(block, inspection.data());
+            BetterChests.INSTANCE.getLogger().info(
+                    "Migrated a legacy drawer at " + format(block.getLocation()) + " with "
+                            + inspection.data().count() + " stored items.");
+            return inspection.data();
+        }
+        if (inspection.status() == Status.CORRUPT_MODERN) {
+            BetterChests.INSTANCE.getLogger().warning(
+                    "Drawer data at " + format(block.getLocation())
+                            + " is inconsistent or unreadable; leaving the stored evidence untouched.");
+        }
+        return inspection.data();
+    }
+
+    /** Performs a read-only classification of one drawer block. */
+    public static Inspection inspect(Block block) {
         String encoded = BlockStorage.getLocationInfo(block.getLocation(), ITEM_KEY);
         String countText = BlockStorage.getLocationInfo(block.getLocation(), COUNT_KEY);
 
         if (encoded == null && countText == null) {
-            DrawerData migrated = migrateLegacy(block);
-            write(block, migrated);
-            return migrated;
+            DrawerData legacy = readLegacyCandidate(block);
+            if (!legacy.isEmpty()) {
+                return new Inspection(
+                        Status.LEGACY_RECOVERABLE,
+                        legacy,
+                        "Recoverable Dev-16 drawer state was found and can be migrated to v2 storage.");
+            }
+            return new Inspection(
+                    Status.LEGACY_UNRESOLVED,
+                    DrawerData.empty(),
+                    block.getChunk().isEntitiesLoaded()
+                            ? "No recoverable Dev-16 item/count pair is currently available."
+                            : "Legacy display entities are not loaded, so recovery cannot be proven yet.");
         }
 
-        long count = parseCount(countText);
-        if (encoded == null || encoded.isBlank() || count <= 0) {
-            return DrawerData.empty();
+        if (encoded == null || countText == null) {
+            return corrupt("Only one of the v2 item/count keys exists.");
+        }
+
+        Long count = parseStoredCount(countText);
+        if (count == null) {
+            return corrupt("The v2 count is not a valid non-negative number.");
+        }
+
+        if (encoded.isBlank() && count == 0L) {
+            return new Inspection(Status.MODERN_EMPTY, DrawerData.empty(), "Valid empty v2 drawer state.");
+        }
+        if (encoded.isBlank() || count <= 0L) {
+            return corrupt("The v2 item/count keys disagree about whether the drawer is empty.");
         }
 
         try {
             byte[] bytes = Base64.getDecoder().decode(encoded);
             ItemStack item = ItemStack.deserializeBytes(bytes);
             if (item.getType() == Material.AIR) {
-                return DrawerData.empty();
+                return corrupt("The v2 stored item decodes to AIR.");
             }
             item.setAmount(1);
-            return new DrawerData(item, count);
+            return new Inspection(
+                    Status.MODERN_VALID,
+                    new DrawerData(item, count),
+                    "Valid v2 drawer storage.");
         } catch (RuntimeException ex) {
-            BetterChests.INSTANCE.getLogger().warning(
-                    "Could not decode drawer data at " + format(block.getLocation()) + "; clearing the corrupted entry.");
-            write(block, DrawerData.empty());
-            return DrawerData.empty();
+            return corrupt("The v2 stored item payload could not be decoded safely.");
         }
+    }
+
+    /** Migrates only positively recovered legacy data. Unknown/corrupt states are never rewritten. */
+    public static boolean migrateLegacyIfRecoverable(Block block) {
+        Inspection inspection = inspect(block);
+        if (inspection.status() != Status.LEGACY_RECOVERABLE) {
+            return false;
+        }
+        write(block, inspection.data());
+        BetterChests.INSTANCE.getLogger().info(
+                "Doctor migrated a legacy drawer at " + format(block.getLocation()) + " with "
+                        + inspection.data().count() + " stored items.");
+        return true;
     }
 
     public static void write(Block block, DrawerData data) {
@@ -140,12 +197,12 @@ public final class DrawerStorage {
         }
     }
 
-    private static DrawerData migrateLegacy(Block block) {
+    private static DrawerData readLegacyCandidate(Block block) {
         ItemStack item = readLegacyMetadataItem(block);
         long count = readLegacyMetadataCount(block);
 
         // Runtime metadata is lost on restart. Dev-16 also mirrored the value in
-        // three persistent display entities, so recover from those when possible.
+        // persistent display entities, so recover from those when they are already loaded.
         if ((item == null || count <= 0) && block.getChunk().isEntitiesLoaded()) {
             LegacyDisplayData displayData = readLegacyDisplays(block);
             if (item == null) {
@@ -161,8 +218,6 @@ public final class DrawerStorage {
         }
 
         item.setAmount(1);
-        BetterChests.INSTANCE.getLogger().info(
-                "Migrated a legacy drawer at " + format(block.getLocation()) + " with " + count + " stored items.");
         return new DrawerData(item, count);
     }
 
@@ -171,8 +226,7 @@ public final class DrawerStorage {
         for (MetadataValue value : values) {
             Object raw = value.value();
             if (raw instanceof ItemStack stack && stack.getType() != Material.AIR) {
-                ItemStack copy = MutableItemStacks.copyWithAmount(stack, 1);
-                return copy;
+                return MutableItemStacks.copyWithAmount(stack, 1);
             }
         }
         return null;
@@ -214,6 +268,18 @@ public final class DrawerStorage {
         return new LegacyDisplayData(item, count);
     }
 
+    private static @Nullable Long parseStoredCount(String value) {
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            long parsed = Long.parseLong(value.trim());
+            return parsed < 0 ? null : parsed;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     private static long parseCount(@Nullable String value) {
         if (value == null || value.isBlank()) {
             return 0;
@@ -224,6 +290,10 @@ public final class DrawerStorage {
         } catch (NumberFormatException ignored) {
             return 0;
         }
+    }
+
+    private static Inspection corrupt(String detail) {
+        return new Inspection(Status.CORRUPT_MODERN, DrawerData.empty(), detail);
     }
 
     private static NamespacedKey portableItemKey() {
@@ -238,6 +308,17 @@ public final class DrawerStorage {
         return String.format(Locale.ROOT, "%s:%d,%d,%d",
                 location.getWorld() == null ? "unknown" : location.getWorld().getName(),
                 location.getBlockX(), location.getBlockY(), location.getBlockZ());
+    }
+
+    public enum Status {
+        MODERN_VALID,
+        MODERN_EMPTY,
+        LEGACY_RECOVERABLE,
+        LEGACY_UNRESOLVED,
+        CORRUPT_MODERN
+    }
+
+    public record Inspection(Status status, DrawerData data, String detail) {
     }
 
     private record LegacyDisplayData(@Nullable ItemStack item, long count) {
