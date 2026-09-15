@@ -145,11 +145,23 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
                     return;
                 }
 
-                IEStorageCache cache = caches.remove(menu.getLocation());
+                IEStorageCache cache = caches.get(menu.getLocation());
                 if (cache == null) {
                     cache = new IEStorageCache(IEStorageUnit.this, menu);
+                    caches.put(menu.getLocation(), cache);
                 }
 
+                if (!cache.isPersistentStateSafe()) {
+                    e.setCancelled(true);
+                    drops.clear();
+                    e.getPlayer().sendMessage(ChatColor.RED
+                            + "This IE storage unit is frozen because its persisted state needs recovery.");
+                    e.getPlayer().sendMessage(ChatColor.YELLOW
+                            + "Run /sf doctor addons scan before changing or breaking this block.");
+                    return;
+                }
+
+                caches.remove(menu.getLocation());
                 if (!cache.isEmpty()) {
                     cache.destroy(e, drops);
                 } else {

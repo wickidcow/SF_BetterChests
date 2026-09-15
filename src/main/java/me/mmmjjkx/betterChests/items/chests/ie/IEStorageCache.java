@@ -29,7 +29,11 @@ import java.util.regex.Pattern;
 import static me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit.*;
 
 /**
- * Represents a single storage unit with cached data
+ * Represents a single storage unit with cached data.
+ *
+ * <p>Malformed or internally inconsistent persisted state is frozen instead of
+ * normalized. This preserves the original BlockStorage/menu evidence for Doctor
+ * or manual recovery and prevents a routine ticker pass from overwriting it.</p>
  *
  * @author Mooy1, mmmjjkx
  */
@@ -64,6 +68,8 @@ public final class IEStorageCache {
     private Material material;
     private ItemMeta meta;
     private boolean voidExcess;
+    private boolean persistentStateSafe = true;
+    private String persistentStateProblem;
 
     private int amount;
 
@@ -71,59 +77,71 @@ public final class IEStorageCache {
         this.storageUnit = storageUnit;
         this.menu = menu;
 
-        // load data
+        // Load only the historical stable BlockStorage fields. Invalid raw values
+        // are preserved and freeze this cache instead of being normalized to zero.
         reloadData();
 
-        if (isEmpty()) {
-            // empty
-            setEmptyDisplayName();
-            menu.replaceExistingItem(DISPLAY_SLOT, EMPTY_ITEM);
-        } else {
-            // something is stored
-            ItemStack display = menu.getItemInSlot(DISPLAY_SLOT);
-            if (display != null) {
-                ItemMeta copy = display.getItemMeta();
-                // fix if they somehow store the empty item
-                if (copy.getPersistentDataContainer().has(EMPTY_KEY, PersistentDataType.BYTE)) {
-                    // attempt to recover the correct item from output
-                    ItemStack output = menu.getItemInSlot(OUTPUT_SLOT);
-                    if (output != null) {
-                        setStored(output);
-                        menu.replaceExistingItem(OUTPUT_SLOT, null);
-                    } else {
-                        // no output to recover
-                        menu.replaceExistingItem(DISPLAY_SLOT, EMPTY_ITEM);
-                        setEmptyDisplayName();
-                        this.amount = 0;
-                    }
+        ItemStack display = menu.getItemInSlot(DISPLAY_SLOT);
+        if (persistentStateSafe && this.amount == 0) {
+            if (isRealDisplayItem(display)) {
+                markPersistentStateUnsafe("stored count is zero but the display slot still identifies an item");
+            } else {
+                setEmptyDisplayName();
+                menu.replaceExistingItem(DISPLAY_SLOT, EMPTY_ITEM);
+            }
+        } else if (persistentStateSafe) {
+            if (isRealDisplayItem(display)) {
+                load(display, display.getItemMeta());
+            } else {
+                // A non-empty unit without its display identity is inconsistent.
+                // The output slot is strong item-identity evidence, but it contains
+                // real withdrawn items and must never be consumed during recovery.
+                ItemStack output = menu.getItemInSlot(OUTPUT_SLOT);
+                if (isRealDisplayItem(output)) {
+                    ItemStack recoveredIdentity = output.clone();
+                    recoveredIdentity.setAmount(1);
+                    setStored(recoveredIdentity);
+                    BetterChests.INSTANCE.getLogger().warning(
+                            "Recovered IE storage display identity from the output slot at "
+                                    + this.menu.getLocation() + "; the output stack was left untouched.");
                 } else {
-                    // load the item in menu
-                    load(display, copy);
+                    markPersistentStateUnsafe("positive stored count has no display-item identity");
                 }
             }
         }
 
         // void excess handler
         menu.addMenuClickHandler(STATUS_SLOT, (p, slot, item, action) -> {
+            if (!persistentStateSafe) {
+                p.sendMessage(ChatColor.RED + "This storage unit is frozen because its persisted state needs recovery.");
+                p.sendMessage(ChatColor.YELLOW + "Run /sf doctor addons scan and restore from backup if needed.");
+                return false;
+            }
+
             this.voidExcess = !this.voidExcess;
             BlockStorage.addBlockInfo(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
             if (item != null) {
-                ItemMeta meta = item.getItemMeta();
-                List<String> lore = meta.getLore() == null
+                ItemMeta itemMeta = item.getItemMeta();
+                List<String> lore = itemMeta.getLore() == null
                         ? new ArrayList<>()
-                        : new ArrayList<>(meta.getLore());
+                        : new ArrayList<>(itemMeta.getLore());
                 while (lore.size() < 2) {
                     lore.add("");
                 }
                 lore.set(1, this.voidExcess ? VOID_EXCESS_TRUE : VOID_EXCESS_FALSE);
-                meta.setLore(lore);
-                item.setItemMeta(meta);
+                itemMeta.setLore(lore);
+                item.setItemMeta(itemMeta);
             }
             return false;
         });
 
         // interact handler
         menu.addMenuClickHandler(INTERACT_SLOT, (p, slot, item, action) -> {
+            if (!persistentStateSafe) {
+                p.sendMessage(ChatColor.RED + "This storage unit is frozen because its persisted state needs recovery.");
+                return false;
+            }
+
             if (this.amount == 1) {
                 if (action.isShiftClicked() && !action.isRightClicked()) {
                     depositAll(p);
@@ -148,17 +166,42 @@ public final class IEStorageCache {
             return false;
         });
 
-        // load status slot
-        updateStatus();
+        if (persistentStateSafe) {
+            updateStatus();
+        }
     }
 
     public long getStored() {
         return this.amount;
     }
 
+    public boolean isPersistentStateSafe() {
+        return persistentStateSafe;
+    }
+
+    public String getPersistentStateProblem() {
+        return persistentStateProblem;
+    }
+
     private static boolean checkWallSign(Block sign, Block block) {
         return SlimefunTag.WALL_SIGNS.isTagged(sign.getType())
                 && sign.getRelative(((WallSign) sign.getBlockData()).getFacing().getOppositeFace()).equals(block);
+    }
+
+    private static boolean isRealDisplayItem(ItemStack item) {
+        if (item == null || item.getType().isAir()) {
+            return false;
+        }
+        return !item.hasItemMeta()
+                || !item.getItemMeta().getPersistentDataContainer().has(EMPTY_KEY, PersistentDataType.BYTE);
+    }
+
+    private void markPersistentStateUnsafe(String problem) {
+        this.persistentStateSafe = false;
+        this.persistentStateProblem = problem;
+        BetterChests.INSTANCE.getLogger().warning(
+                "Freezing IE storage at " + this.menu.getLocation() + ": " + problem
+                        + ". Raw BlockStorage/menu state will not be normalized automatically.");
     }
 
     private void setDisplayName(String name) {
@@ -230,6 +273,13 @@ public final class IEStorageCache {
     }
 
     void destroy(BlockBreakEvent e, List<ItemStack> drops) {
+        if (!persistentStateSafe) {
+            e.setCancelled(true);
+            e.getPlayer().sendMessage(ChatColor.RED
+                    + "This storage unit has unsafe persisted state and cannot be broken until it is recovered.");
+            return;
+        }
+
         // add output slot
         ItemStack output = this.menu.getItemInSlot(OUTPUT_SLOT);
         if (output != null && matches(output)) {
@@ -242,7 +292,8 @@ public final class IEStorageCache {
 
         Block b = e.getBlock();
         ItemStack drop = this.storageUnit.getItem().clone();
-        drop.setItemMeta(IEStorageUnit.saveToStack(drop.getItemMeta(), this.storageUnit.getDisplayingItem(b), this.displayName, this.amount));
+        drop.setItemMeta(IEStorageUnit.saveToStack(
+                drop.getItemMeta(), this.storageUnit.getDisplayingItem(b), this.displayName, this.amount));
         e.getPlayer().sendMessage(ChatColor.GREEN + "Stored items transferred to dropped item");
         drops.add(drop);
     }
@@ -250,13 +301,37 @@ public final class IEStorageCache {
     void reloadData() {
         Config config = BlockStorage.getLocationInfo(this.menu.getLocation());
         String stored = config == null ? null : config.getString(STORED_AMOUNT);
-        try {
-            this.amount = stored == null ? 0 : Math.max(0, Math.min(this.storageUnit.max, Integer.parseInt(stored)));
-        } catch (NumberFormatException ignored) {
-            BetterChests.INSTANCE.getLogger().warning("Invalid IE storage amount at " + this.menu.getLocation() + ": " + stored);
-            this.amount = 0;
-        }
         this.voidExcess = config != null && "true".equals(config.getString(VOID_EXCESS));
+        this.persistentStateSafe = true;
+        this.persistentStateProblem = null;
+
+        if (stored == null || stored.isBlank()) {
+            this.amount = 0;
+            return;
+        }
+
+        final long parsed;
+        try {
+            parsed = Long.parseLong(stored.trim());
+        } catch (NumberFormatException exception) {
+            this.amount = 0;
+            markPersistentStateUnsafe("stored count is malformed: " + stored);
+            return;
+        }
+
+        if (parsed < 0L) {
+            this.amount = 0;
+            markPersistentStateUnsafe("stored count is negative: " + parsed);
+            return;
+        }
+        if (parsed > this.storageUnit.max) {
+            this.amount = 0;
+            markPersistentStateUnsafe(
+                    "stored count " + parsed + " exceeds capacity " + this.storageUnit.max);
+            return;
+        }
+
+        this.amount = (int) parsed;
     }
 
     void load(ItemStack stored, ItemMeta copy) {
@@ -289,6 +364,10 @@ public final class IEStorageCache {
     }
 
     void input() {
+        if (!persistentStateSafe) {
+            return;
+        }
+
         ItemStack input = this.menu.getItemInSlot(INPUT_SLOT);
         if (input == null) {
             return;
@@ -320,7 +399,7 @@ public final class IEStorageCache {
     }
 
     private void output() {
-        if (this.amount == 0) {
+        if (!persistentStateSafe || this.amount == 0) {
             return;
         }
         ItemStack outputSlot = this.menu.getItemInSlot(OUTPUT_SLOT);
@@ -343,6 +422,10 @@ public final class IEStorageCache {
     }
 
     void tick(Block block) {
+        if (!persistentStateSafe) {
+            return;
+        }
+
         // input output
         input();
         output();
@@ -396,9 +479,9 @@ public final class IEStorageCache {
         this.material = input.getType();
 
         // add the display key to the display input and set amount 1
-        ItemMeta meta = input.getItemMeta();
-        meta.getPersistentDataContainer().set(DISPLAY_KEY, PersistentDataType.BYTE, (byte) 1);
-        input.setItemMeta(meta);
+        ItemMeta itemMeta = input.getItemMeta();
+        itemMeta.getPersistentDataContainer().set(DISPLAY_KEY, PersistentDataType.BYTE, (byte) 1);
+        input.setItemMeta(itemMeta);
         input.setAmount(1);
 
         this.menu.replaceExistingItem(DISPLAY_SLOT, input);
@@ -413,7 +496,8 @@ public final class IEStorageCache {
     }
 
     boolean matches(ItemStack item) {
-        return item != null
+        return persistentStateSafe
+                && item != null
                 && this.material != null
                 && !item.getType().isAir()
                 && item.getType() == this.material
@@ -430,11 +514,11 @@ public final class IEStorageCache {
     }
 
     boolean isEmpty() {
-        return this.amount == 0;
+        return persistentStateSafe && this.amount == 0;
     }
 
     private void withdraw(Player player, int requested) {
-        if (requested <= 0 || this.amount <= 0) {
+        if (!persistentStateSafe || requested <= 0 || this.amount <= 0) {
             return;
         }
 
@@ -466,7 +550,7 @@ public final class IEStorageCache {
     }
 
     private void withdrawLast(Player player) {
-        if (this.amount != 1) {
+        if (!persistentStateSafe || this.amount != 1) {
             return;
         }
 
@@ -487,6 +571,10 @@ public final class IEStorageCache {
     }
 
     public void depositAll(ItemStack[] itemStacks, boolean observeVoiding) {
+        if (!persistentStateSafe) {
+            return;
+        }
+
         if (this.amount < this.storageUnit.max) {
             for (ItemStack item : itemStacks) {
                 if (item != null && matches(item)) {
@@ -517,6 +605,10 @@ public final class IEStorageCache {
     }
 
     public void amount(int amount) {
+        if (!persistentStateSafe) {
+            return;
+        }
+
         this.amount = Math.max(0, Math.min(this.storageUnit.max, amount));
         if (this.amount == 0) {
             setEmpty();
