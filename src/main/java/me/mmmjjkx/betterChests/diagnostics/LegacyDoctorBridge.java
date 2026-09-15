@@ -12,12 +12,17 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-/** Reflective bridge to Slimefun Legacy's optional same-ID schema migration APIs. */
+/** Reflective bridge to Slimefun Legacy's optional Doctor and same-ID schema migration APIs. */
 public final class LegacyDoctorBridge {
 
+    private static final String DOCTOR_API =
+        "io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor";
+    private static final String REPORT_API =
+        "io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctorReport";
     private static final String SCHEMA_PROBE_API =
         "io.github.thebusybiscuit.slimefun4.api.diagnostics.LegacyItemSchemaProbe";
     private static final String SCHEMA_CANDIDATE_API =
@@ -37,8 +42,33 @@ public final class LegacyDoctorBridge {
         }
 
         ClassLoader loader = slimefun.getClass().getClassLoader();
+        registerAddonDoctor(plugin, loader);
         registerSchemaProbe(plugin, loader);
         registerSchemaMigrator(plugin, loader);
+    }
+
+    private static void registerAddonDoctor(@NotNull BetterChests plugin, @NotNull ClassLoader loader) {
+        try {
+            Class<?> doctorInterface = Class.forName(DOCTOR_API, false, loader);
+            Class<?> reportClass = Class.forName(REPORT_API, false, loader);
+            Constructor<?> reportConstructor = reportClass.getConstructor(
+                String.class,
+                boolean.class,
+                long.class,
+                long.class,
+                long.class,
+                long.class,
+                List.class);
+            InvocationHandler handler =
+                (proxy, method, arguments) -> invokeDoctor(proxy, method, arguments, reportConstructor);
+            Object provider = Proxy.newProxyInstance(loader, new Class<?>[] {doctorInterface}, handler);
+            registerRaw(Bukkit.getServicesManager(), doctorInterface, provider, plugin);
+            plugin.getLogger().info("Registered BetterChests drawer reconciliation with Slimefun Legacy Doctor.");
+        } catch (ClassNotFoundException ignored) {
+            // Optional Slimefun Legacy API; other Slimefun implementations remain supported.
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING, "Could not register the optional Slimefun Addon Doctor bridge.", exception);
+        }
     }
 
     private static void registerSchemaProbe(@NotNull BetterChests plugin, @NotNull ClassLoader loader) {
@@ -78,6 +108,33 @@ public final class LegacyDoctorBridge {
 
     public static void unregister(@NotNull BetterChests plugin) {
         Bukkit.getServicesManager().unregisterAll(plugin);
+    }
+
+    private static Object invokeDoctor(
+        Object proxy,
+        Method method,
+        Object[] arguments,
+        Constructor<?> reportConstructor
+    ) throws ReflectiveOperationException {
+        return switch (method.getName()) {
+            case "getAddonName" -> "BetterChests";
+            case "runDoctor" -> {
+                boolean repair = arguments != null && arguments.length > 0 && Boolean.TRUE.equals(arguments[0]);
+                BetterChestsDoctorReport report = BetterChestsDoctor.run(repair);
+                yield reportConstructor.newInstance(
+                    "BetterChests",
+                    repair,
+                    report.getScannedEntries(),
+                    report.getIssuesFound(),
+                    report.getRepairedEntries(),
+                    report.getFailures(),
+                    report.getDetails());
+            }
+            case "toString" -> "BetterChestsAddonDoctor";
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "equals" -> arguments != null && arguments.length == 1 && arguments[0] == proxy;
+            default -> throw new UnsupportedOperationException("Unsupported AddonDoctor method: " + method.getName());
+        };
     }
 
     private static Object invokeSchemaProbe(
