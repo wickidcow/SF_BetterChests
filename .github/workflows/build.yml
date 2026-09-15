@@ -30,6 +30,9 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Verify Doctor drawer migration safety
+        run: python3 scripts/verify_doctor_drawers.py .
+
       - name: Build jar against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
 
