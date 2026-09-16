@@ -13,8 +13,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.1"
-  OUTPUT_NAME: "SF_BetterChests1.0.1.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.2"
+  OUTPUT_NAME: "SF_BetterChests1.0.2.jar"
 
 jobs:
   build:
@@ -33,7 +33,7 @@ jobs:
       - name: Verify Doctor drawer migration safety
         run: python3 scripts/verify_doctor_drawers.py .
 
-      - name: Build jar against Paper 1.21.11 baseline
+      - name: Build release JAR against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
 
       - name: Stage versioned JAR
@@ -42,8 +42,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          JAR="$(find target -maxdepth 1 -type f -name 'BetterChests-Albion-*.jar' ! -name 'original-*' -print -quit)"
-          test -n "$JAR"
+          JAR="target/${OUTPUT_NAME}"
+          test -s "$JAR"
           OUTPUT="dist/${OUTPUT_NAME}"
           HANDOFF_NAME="betterchests-ci-${GITHUB_SHA}"
           cp "$JAR" "$OUTPUT"
@@ -51,6 +51,9 @@ jobs:
           sha256sum "$OUTPUT"
           echo "output_name=${OUTPUT_NAME}" >> "$GITHUB_OUTPUT"
           echo "handoff_name=${HANDOFF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Paper 26.3 compilation
+        run: mvn --batch-mode --update-snapshots -Dpaper.version=26.3-R0.1-SNAPSHOT -DskipTests clean package
 
       - name: Verify 1.21.11 compatibility artifact
         shell: bash
@@ -68,6 +71,7 @@ jobs:
       - name: Upload raw JAR artifact
         uses: actions/upload-artifact@v7
         with:
+          name: ${{ env.OUTPUT_NAME }}
           path: dist/${{ env.OUTPUT_NAME }}
           archive: false
           if-no-files-found: error
@@ -212,8 +216,9 @@ jobs:
           test -s "$JAR"
           unzip -tqq "$JAR"
           sha256sum "$JAR"
+          NOTES="BetterChests 1.0.2 adds Paper 26.3 compile validation while retaining Paper 26.2 as the primary stable runtime target and the 1.21.11 Java 21 universal release baseline. The Maven build now emits ${OUTPUT_NAME} directly."
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes --title "SF_BetterChests $TAG"
+            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests $TAG" --notes "$NOTES"
           fi
