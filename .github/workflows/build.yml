@@ -28,7 +28,6 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-
       - name: Verify canonical release identity
         shell: bash
         run: |
@@ -37,13 +36,10 @@ jobs:
           test "$OUTPUT_NAME" = "SF_BetterChests${VERSION}.jar"
           PROJECT_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
           test "$PROJECT_VERSION" = "$VERSION"
-
       - name: Verify Doctor drawer migration safety
         run: python3 scripts/verify_doctor_drawers.py .
-
       - name: Build release JAR against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
-
       - name: Stage versioned JAR
         id: jar-meta
         shell: bash
@@ -56,10 +52,8 @@ jobs:
           test -s "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
           echo "output_name=${OUTPUT_NAME}" >> "$GITHUB_OUTPUT"
-
       - name: Verify Paper 26.3 alpha compilation
         run: mvn --batch-mode --update-snapshots -Dpaper.version=26.3-rc-3.build.1-alpha -DskipTests clean package
-
       - name: Verify release metadata and Java 21 bytecode
         shell: bash
         run: |
@@ -68,13 +62,9 @@ jobs:
           unzip -p "$JAR" plugin.yml | tee /tmp/betterchests-plugin.yml
           grep -F "name: BetterChests" /tmp/betterchests-plugin.yml
           grep -F "version: '${VERSION}'" /tmp/betterchests-plugin.yml || grep -F "version: ${VERSION}" /tmp/betterchests-plugin.yml
-          if grep -Eiq '^version:.*(legacy|english|snapshot)' /tmp/betterchests-plugin.yml; then
-            echo 'Public plugin version contains a forbidden maintenance suffix.' >&2
-            exit 1
-          fi
+          if grep -Eiq '^version:.*(legacy|english|snapshot)' /tmp/betterchests-plugin.yml; then exit 1; fi
           grep -F "api-version: '1.21.11'" /tmp/betterchests-plugin.yml
           javap -verbose -classpath "$JAR" me.mmmjjkx.betterChests.BetterChests | grep -F "major version: 65"
-
       - name: Upload canonical raw JAR artifact
         uses: actions/upload-artifact@v7
         with:
@@ -93,20 +83,19 @@ jobs:
         paper_version:
           - '1.21.11'
           - '26.2'
-
     steps:
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
-
+      - name: Prepare plugin directory
+        run: mkdir -p server/plugins
       - name: Download validated BetterChests JAR
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.build.outputs.output_name }}
-          path: server/plugins
-
+          path: server/plugins/${{ needs.build.outputs.output_name }}
       - name: Verify downloaded plugin JAR
         shell: bash
         run: |
@@ -114,30 +103,21 @@ jobs:
           OUTPUT_NAME='${{ needs.build.outputs.output_name }}'
           test -s "server/plugins/$OUTPUT_NAME"
           unzip -tqq "server/plugins/$OUTPUT_NAME"
-
       - name: Download stable Paper and Slimefun Legacy
         shell: bash
         env:
           PAPER_VERSION: ${{ matrix.paper_version }}
         run: |
           set -euo pipefail
-          mkdir -p server/plugins
           USER_AGENT='SF_BetterChests-CI (github.com/wickidcow/SF_BetterChests)'
           PAPER_BUILDS=$(curl -fsSL -H "User-Agent: ${USER_AGENT}" "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
           PAPER_URL=$(echo "${PAPER_BUILDS}" | jq -r 'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
-          if [ -z "${PAPER_URL}" ]; then
-            echo "No stable Paper ${PAPER_VERSION} build was returned by the PaperMC Fill API." >&2
-            exit 1
-          fi
+          if [ -z "${PAPER_URL}" ]; then echo "No stable Paper ${PAPER_VERSION} build returned." >&2; exit 1; fi
           curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/paper.jar "${PAPER_URL}"
           SFL_RELEASE=$(curl -fsSL -H 'Accept: application/vnd.github+json' -H "User-Agent: ${USER_AGENT}" https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
           SFL_URL=$(echo "${SFL_RELEASE}" | jq -r '.assets[] | select(.name | startswith("Slimefun-Legacy") and endswith(".jar")) | .browser_download_url' | head -n 1)
-          if [ -z "${SFL_URL}" ] || [ "${SFL_URL}" = 'null' ]; then
-            echo 'Could not resolve the latest Slimefun Legacy JAR asset.' >&2
-            exit 1
-          fi
+          if [ -z "${SFL_URL}" ] || [ "${SFL_URL}" = 'null' ]; then exit 1; fi
           curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/plugins/Slimefun.jar "${SFL_URL}"
-
       - name: Start Paper and verify plugin enable
         shell: bash
         run: |
@@ -155,11 +135,8 @@ jobs:
             sleep 1
           done
           cat console.log
-          if [ "${READY}" -ne 1 ]; then echo 'Paper did not reach a successful startup state.' >&2; exit 1; fi
-          if grep -Eiq "Unsupported API version|Error occurred while enabling BetterChests|Could not load.*BetterChests|NoClassDefFoundError.*betterChests|NoSuchMethodError.*betterChests" console.log; then
-            echo 'BetterChests reported an API/runtime linkage or enable failure.' >&2
-            exit 1
-          fi
+          if [ "${READY}" -ne 1 ]; then exit 1; fi
+          if grep -Eiq "Unsupported API version|Error occurred while enabling BetterChests|Could not load.*BetterChests|NoClassDefFoundError.*betterChests|NoSuchMethodError.*betterChests" console.log; then exit 1; fi
           grep -q 'BetterChests' console.log
 
   release:
@@ -168,11 +145,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare release directory
+        run: mkdir -p dist
       - name: Download validated JAR
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.build.outputs.output_name }}
-          path: dist
+          path: dist/${{ needs.build.outputs.output_name }}
       - name: Publish canonical raw JAR release asset
         env:
           GH_TOKEN: ${{ github.token }}
@@ -185,11 +164,9 @@ jobs:
           unzip -tqq "$JAR"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             while IFS= read -r OLD; do
-              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then
-                gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y
-              fi
+              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y; fi
             done < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
             gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests ${VERSION}" --notes "BetterChests ${VERSION}: canonical SF_BetterChests${VERSION}.jar release."
+            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests ${VERSION}" --notes "BetterChests ${VERSION}: canonical ${OUTPUT_NAME} release."
           fi
