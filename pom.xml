@@ -6,20 +6,15 @@
 
     <groupId>me.mmmjjkx</groupId>
     <artifactId>BetterChests-Albion</artifactId>
-    <version>2.0.8-legacy-1.0.2</version>
+    <version>1.0.2</version>
     <packaging>jar</packaging>
 
-    <name>BetterChests Albion Fork</name>
+    <name>BetterChests</name>
     <description>Java 21 bytecode / Paper 1.21.11+ modernization of SfBetterChests.</description>
 
     <properties>
-        <!-- Build on Java 25, but emit Java 21 bytecode so the same JAR can run on
-             Paper 1.21.11 (Java 21+) as well as Paper 26.1/26.2/26.3. -->
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Compile the release JAR against the oldest supported Paper API. CI also
-             compiles against 26.3 so newer API changes are caught without raising
-             the minimum runtime requirement. -->
         <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
         <slimefun.version>RC-37</slimefun.version>
         <slimehud.version>v1.2.7</slimehud.version>
@@ -47,14 +42,12 @@
             <version>${paper.version}</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>com.github.Slimefun</groupId>
             <artifactId>Slimefun4</artifactId>
             <version>${slimefun.version}</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>com.github.schntgaispock</groupId>
             <artifactId>SlimeHUD</artifactId>
@@ -62,7 +55,6 @@
             <scope>provided</scope>
             <optional>true</optional>
         </dependency>
-
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -72,7 +64,7 @@
     </dependencies>
 
     <build>
-        <finalName>SF_BetterChests1.0.2</finalName>
+        <finalName>SF_BetterChests${project.version}</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -90,15 +82,12 @@
                         <goals><goal>enforce</goal></goals>
                         <configuration>
                             <rules>
-                                <requireJavaVersion>
-                                    <version>[25,)</version>
-                                </requireJavaVersion>
+                                <requireJavaVersion><version>[25,)</version></requireJavaVersion>
                             </rules>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -109,7 +98,6 @@
                     <showWarnings>true</showWarnings>
                 </configuration>
             </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
