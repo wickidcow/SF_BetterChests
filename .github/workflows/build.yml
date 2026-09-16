@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.2"
+  VERSION: "1.0.2"
   OUTPUT_NAME: "SF_BetterChests1.0.2.jar"
 
 jobs:
@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       output_name: ${{ steps.jar-meta.outputs.output_name }}
-      handoff_name: ${{ steps.jar-meta.outputs.handoff_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v5
@@ -29,6 +28,15 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+
+      - name: Verify canonical release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]
+          test "$OUTPUT_NAME" = "SF_BetterChests${VERSION}.jar"
+          PROJECT_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          test "$PROJECT_VERSION" = "$VERSION"
 
       - name: Verify Doctor drawer migration safety
         run: python3 scripts/verify_doctor_drawers.py .
@@ -44,43 +52,35 @@ jobs:
           mkdir -p dist
           JAR="target/${OUTPUT_NAME}"
           test -s "$JAR"
-          OUTPUT="dist/${OUTPUT_NAME}"
-          HANDOFF_NAME="betterchests-ci-${GITHUB_SHA}"
-          cp "$JAR" "$OUTPUT"
-          test -s "$OUTPUT"
-          sha256sum "$OUTPUT"
+          cp "$JAR" "dist/${OUTPUT_NAME}"
+          test -s "dist/${OUTPUT_NAME}"
+          sha256sum "dist/${OUTPUT_NAME}"
           echo "output_name=${OUTPUT_NAME}" >> "$GITHUB_OUTPUT"
-          echo "handoff_name=${HANDOFF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Verify Paper 26.3 alpha compilation
         run: mvn --batch-mode --update-snapshots -Dpaper.version=26.3-rc-3.build.1-alpha -DskipTests clean package
 
-      - name: Verify 1.21.11 compatibility artifact
+      - name: Verify release metadata and Java 21 bytecode
         shell: bash
         run: |
           set -euo pipefail
           JAR="dist/${OUTPUT_NAME}"
           unzip -p "$JAR" plugin.yml | tee /tmp/betterchests-plugin.yml
           grep -F "name: BetterChests" /tmp/betterchests-plugin.yml
+          grep -F "version: '${VERSION}'" /tmp/betterchests-plugin.yml || grep -F "version: ${VERSION}" /tmp/betterchests-plugin.yml
+          if grep -Eiq '^version:.*(legacy|english|snapshot)' /tmp/betterchests-plugin.yml; then
+            echo 'Public plugin version contains a forbidden maintenance suffix.' >&2
+            exit 1
+          fi
           grep -F "api-version: '1.21.11'" /tmp/betterchests-plugin.yml
+          javap -verbose -classpath "$JAR" me.mmmjjkx.betterChests.BetterChests | grep -F "major version: 65"
 
-          echo "Verifying Java 21 bytecode"
-          javap -verbose -classpath "$JAR" me.mmmjjkx.betterChests.BetterChests \
-            | grep -F "major version: 65"
-
-      - name: Upload raw JAR artifact
+      - name: Upload canonical raw JAR artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.OUTPUT_NAME }}
           path: dist/${{ env.OUTPUT_NAME }}
           archive: false
-          if-no-files-found: error
-
-      - name: Upload CI handoff artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.jar-meta.outputs.handoff_name }}
-          path: dist/${{ env.OUTPUT_NAME }}
           if-no-files-found: error
 
   runtime-test:
@@ -104,7 +104,7 @@ jobs:
       - name: Download validated BetterChests JAR
         uses: actions/download-artifact@v7
         with:
-          name: ${{ needs.build.outputs.handoff_name }}
+          name: ${{ needs.build.outputs.output_name }}
           path: server/plugins
 
       - name: Verify downloaded plugin JAR
@@ -122,21 +122,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p server/plugins
-
           USER_AGENT='SF_BetterChests-CI (github.com/wickidcow/SF_BetterChests)'
-          PAPER_BUILDS=$(curl -fsSL -H "User-Agent: ${USER_AGENT}" \
-            "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
+          PAPER_BUILDS=$(curl -fsSL -H "User-Agent: ${USER_AGENT}" "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
           PAPER_URL=$(echo "${PAPER_BUILDS}" | jq -r 'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
           if [ -z "${PAPER_URL}" ]; then
             echo "No stable Paper ${PAPER_VERSION} build was returned by the PaperMC Fill API." >&2
             exit 1
           fi
           curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/paper.jar "${PAPER_URL}"
-
-          SFL_RELEASE=$(curl -fsSL \
-            -H 'Accept: application/vnd.github+json' \
-            -H "User-Agent: ${USER_AGENT}" \
-            https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
+          SFL_RELEASE=$(curl -fsSL -H 'Accept: application/vnd.github+json' -H "User-Agent: ${USER_AGENT}" https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
           SFL_URL=$(echo "${SFL_RELEASE}" | jq -r '.assets[] | select(.name | startswith("Slimefun-Legacy") and endswith(".jar")) | .browser_download_url' | head -n 1)
           if [ -z "${SFL_URL}" ] || [ "${SFL_URL}" = 'null' ]; then
             echo 'Could not resolve the latest Slimefun Legacy JAR asset.' >&2
@@ -150,75 +144,52 @@ jobs:
           set -euo pipefail
           cd server
           echo 'eula=true' > eula.txt
-
           java -Xms512M -Xmx1G -jar paper.jar --nogui > console.log 2>&1 &
           SERVER_PID=$!
-          cleanup() {
-            kill "${SERVER_PID}" 2>/dev/null || true
-            wait "${SERVER_PID}" 2>/dev/null || true
-          }
+          cleanup() { kill "${SERVER_PID}" 2>/dev/null || true; wait "${SERVER_PID}" 2>/dev/null || true; }
           trap cleanup EXIT
-
           READY=0
           for _ in $(seq 1 120); do
-            if grep -q 'Done (' console.log 2>/dev/null; then
-              READY=1
-              break
-            fi
-            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-              break
-            fi
+            if grep -q 'Done (' console.log 2>/dev/null; then READY=1; break; fi
+            if ! kill -0 "${SERVER_PID}" 2>/dev/null; then break; fi
             sleep 1
           done
-
           cat console.log
-
-          if [ "${READY}" -ne 1 ]; then
-            echo 'Paper did not reach a successful startup state.' >&2
-            exit 1
-          fi
-
+          if [ "${READY}" -ne 1 ]; then echo 'Paper did not reach a successful startup state.' >&2; exit 1; fi
           if grep -Eiq "Unsupported API version|Error occurred while enabling BetterChests|Could not load.*BetterChests|NoClassDefFoundError.*betterChests|NoSuchMethodError.*betterChests" console.log; then
             echo 'BetterChests reported an API/runtime linkage or enable failure.' >&2
             exit 1
           fi
-
-          if ! grep -q 'BetterChests' console.log; then
-            echo 'BetterChests did not appear in the Paper startup log.' >&2
-            exit 1
-          fi
+          grep -q 'BetterChests' console.log
 
   release:
-    name: Publish validated raw JAR release asset
+    name: Publish canonical raw JAR release asset
     needs: [build, runtime-test]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
     runs-on: ubuntu-latest
-
     steps:
       - name: Download validated JAR
         uses: actions/download-artifact@v7
         with:
-          name: ${{ needs.build.outputs.handoff_name }}
+          name: ${{ needs.build.outputs.output_name }}
           path: dist
-
-      - name: Publish raw JAR release asset
+      - name: Publish canonical raw JAR release asset
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG="$GITHUB_REF_NAME"
-          else
-            TAG="v${LEGACY_ARTIFACT_VERSION}"
-          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
           test -s "$JAR"
           unzip -tqq "$JAR"
-          sha256sum "$JAR"
-          NOTES="BetterChests 1.0.2 adds Paper 26.3 alpha compile validation while retaining Paper 26.2 as the primary stable runtime target and the 1.21.11 Java 21 universal release baseline. The Maven build now emits ${OUTPUT_NAME} directly."
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            while IFS= read -r OLD; do
+              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then
+                gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y
+              fi
+            done < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
             gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests $TAG" --notes "$NOTES"
+            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests ${VERSION}" --notes "BetterChests ${VERSION}: canonical SF_BetterChests${VERSION}.jar release."
           fi
