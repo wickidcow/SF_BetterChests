@@ -6,7 +6,7 @@
 
     <groupId>me.mmmjjkx</groupId>
     <artifactId>BetterChests-Albion</artifactId>
-    <version>2.0.8-legacy-1.0.1</version>
+    <version>2.0.8-legacy-1.0.2</version>
     <packaging>jar</packaging>
 
     <name>BetterChests Albion Fork</name>
@@ -14,18 +14,18 @@
 
     <properties>
         <!-- Build on Java 25, but emit Java 21 bytecode so the same JAR can run on
-             Paper 1.21.11 (Java 21+) as well as Paper 26.1/26.2 (Java 25). -->
+             Paper 1.21.11 (Java 21+) as well as Paper 26.1/26.2/26.3. -->
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Compile against the oldest supported Paper API. This prevents accidental
-             linkage to methods introduced only in the newer 26.x API. -->
+        <!-- Compile the release JAR against the oldest supported Paper API. CI also
+             compiles against 26.3 so newer API changes are caught without raising
+             the minimum runtime requirement. -->
         <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
         <slimefun.version>RC-37</slimefun.version>
         <slimehud.version>v1.2.7</slimehud.version>
     </properties>
 
     <repositories>
-        <!-- Resolve normal Maven libraries from Central before aggregate plugin repositories. -->
         <repository>
             <id>central</id>
             <url>https://repo.maven.apache.org/maven2</url>
@@ -69,11 +69,10 @@
             <version>5.13.1</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>
-        <finalName>BetterChests-Albion-${project.version}</finalName>
+        <finalName>SF_BetterChests1.0.2</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
