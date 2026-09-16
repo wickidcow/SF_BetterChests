@@ -90,17 +90,21 @@ jobs:
           distribution: temurin
           java-version: '25'
       - name: Prepare plugin directory
-        run: mkdir -p server/plugins
+        run: mkdir -p server/plugins/_artifact
       - name: Download validated BetterChests JAR
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.build.outputs.output_name }}
-          path: server/plugins/${{ needs.build.outputs.output_name }}
-      - name: Verify downloaded plugin JAR
+          path: server/plugins/_artifact
+      - name: Normalize and verify downloaded plugin JAR
         shell: bash
         run: |
           set -euo pipefail
           OUTPUT_NAME='${{ needs.build.outputs.output_name }}'
+          DOWNLOADED="$(find server/plugins/_artifact -type f -name '*.jar' -print -quit)"
+          test -n "$DOWNLOADED"
+          mv "$DOWNLOADED" "server/plugins/$OUTPUT_NAME"
+          rm -rf server/plugins/_artifact
           test -s "server/plugins/$OUTPUT_NAME"
           unzip -tqq "server/plugins/$OUTPUT_NAME"
       - name: Download stable Paper and Slimefun Legacy
@@ -146,12 +150,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prepare release directory
-        run: mkdir -p dist
+        run: mkdir -p dist/_artifact
       - name: Download validated JAR
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.build.outputs.output_name }}
-          path: dist/${{ needs.build.outputs.output_name }}
+          path: dist/_artifact
+      - name: Normalize downloaded release JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOWNLOADED="$(find dist/_artifact -type f -name '*.jar' -print -quit)"
+          test -n "$DOWNLOADED"
+          mv "$DOWNLOADED" "dist/${OUTPUT_NAME}"
+          rm -rf dist/_artifact
+          test -s "dist/${OUTPUT_NAME}"
       - name: Publish canonical raw JAR release asset
         env:
           GH_TOKEN: ${{ github.token }}
