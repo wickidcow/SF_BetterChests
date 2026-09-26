@@ -2,7 +2,8 @@ package me.mmmjjkx.betterChests.diagnostics;
 
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit;
-import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
+import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -21,12 +22,8 @@ final class IEStorageDoctorInspector {
     }
 
     static Result inspect(Block block, IEStorageUnit unit) {
-        var controller = Slimefun.getDatabaseManager().getBlockDataController();
-        var data = controller.getBlockData(block.getLocation());
-        if (data != null && !data.isDataLoaded()) {
-            controller.loadBlockData(data);
-        }
-        String rawAmount = data == null ? null : data.getData(STORED_AMOUNT);
+        Config config = BlockStorage.getLocationInfo(block.getLocation());
+        String rawAmount = config == null ? null : config.getString(STORED_AMOUNT);
 
         final long amount;
         if (rawAmount == null || rawAmount.isBlank()) {
@@ -52,7 +49,7 @@ final class IEStorageDoctorInspector {
                     "IE storage count exceeds this unit's capacity; Doctor did not clamp or overwrite it.");
         }
 
-        BlockMenu menu = data == null ? null : data.getBlockMenu();
+        BlockMenu menu = BlockStorage.getInventory(block);
         if (amount == 0L) {
             if (menu == null) {
                 return new Result(Status.HEALTHY_EMPTY, "IE storage is empty; its block menu is not currently available.");
