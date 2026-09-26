@@ -1,6 +1,6 @@
 package me.mmmjjkx.betterChests.utils;
 
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 
@@ -13,8 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-@SuppressWarnings("deprecation")
 public final class LanguageManager {
+    private static final LegacyComponentSerializer LEGACY_AMPERSAND = LegacyComponentSerializer.legacyAmpersand();
+    private static final LegacyComponentSerializer LEGACY_SECTION = LegacyComponentSerializer.legacySection();
     private static final List<String> BUNDLED_LANGUAGES = List.of("en-US", "pt_BR");
 
     private final Plugin plugin;
@@ -77,7 +78,7 @@ public final class LanguageManager {
     }
 
     private String color(String value) {
-        return ChatColor.translateAlternateColorCodes('&', value);
+        return LEGACY_SECTION.serialize(LEGACY_AMPERSAND.deserialize(value));
     }
 
     private void completeLangFile(String resourceFile) {
