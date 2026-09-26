@@ -9,7 +9,9 @@ import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
@@ -40,8 +42,15 @@ import static me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit.*;
 @SuppressWarnings("deprecation")
 public final class IEStorageCache {
 
+    private static final char LEGACY_COLOR_CHAR = '\u00A7';
+    private static final String LEGACY_WHITE = "\u00A7f";
+    private static final String LEGACY_GRAY = "\u00A77";
+    private static final String LEGACY_YELLOW = "\u00A7e";
+    private static final LegacyComponentSerializer LEGACY_SECTION = LegacyComponentSerializer.legacySection();
+    private static final LegacyComponentSerializer LEGACY_AMPERSAND = LegacyComponentSerializer.legacyAmpersand();
+
     /* Menu strings */
-    private static final String EMPTY_DISPLAY_NAME = ChatColor.WHITE + "Empty";
+    private static final String EMPTY_DISPLAY_NAME = LEGACY_WHITE + "Empty";
     private static final String VOID_EXCESS_TRUE = ChatColors.color("&7Void Excess:&e true");
     private static final String VOID_EXCESS_FALSE = ChatColors.color("&7Void Excess:&e false");
 
@@ -51,7 +60,7 @@ public final class IEStorageCache {
 
     /* Menu Items */
     private static final ItemStack EMPTY_ITEM = new ItemStackBuilder(Material.BARRIER, meta -> {
-        meta.setDisplayName(ChatColor.WHITE + "Empty");
+        meta.displayName(Component.text("Empty", NamedTextColor.WHITE));
         meta.getPersistentDataContainer().set(EMPTY_KEY, PersistentDataType.BYTE, (byte) 1);
     }).getItemStack();
 
@@ -113,8 +122,8 @@ public final class IEStorageCache {
         // void excess handler
         menu.addMenuClickHandler(STATUS_SLOT, (p, slot, item, action) -> {
             if (!persistentStateSafe) {
-                p.sendMessage(ChatColor.RED + "This storage unit is frozen because its persisted state needs recovery.");
-                p.sendMessage(ChatColor.YELLOW + "Run /sf doctor addons scan and restore from backup if needed.");
+                p.sendMessage(Component.text("This storage unit is frozen because its persisted state needs recovery.", NamedTextColor.RED));
+                p.sendMessage(Component.text("Run /sf doctor addons scan and restore from backup if needed.", NamedTextColor.YELLOW));
                 return false;
             }
 
@@ -122,14 +131,14 @@ public final class IEStorageCache {
             BlockStorage.addBlockInfo(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
             if (item != null) {
                 ItemMeta itemMeta = item.getItemMeta();
-                List<String> lore = itemMeta.getLore() == null
+                List<Component> lore = itemMeta.lore() == null
                         ? new ArrayList<>()
-                        : new ArrayList<>(itemMeta.getLore());
+                        : new ArrayList<>(itemMeta.lore());
                 while (lore.size() < 2) {
-                    lore.add("");
+                    lore.add(Component.empty());
                 }
-                lore.set(1, this.voidExcess ? VOID_EXCESS_TRUE : VOID_EXCESS_FALSE);
-                itemMeta.setLore(lore);
+                lore.set(1, LEGACY_SECTION.deserialize(this.voidExcess ? VOID_EXCESS_TRUE : VOID_EXCESS_FALSE));
+                itemMeta.lore(lore);
                 item.setItemMeta(itemMeta);
             }
             return false;
@@ -275,8 +284,9 @@ public final class IEStorageCache {
     void destroy(BlockBreakEvent e, List<ItemStack> drops) {
         if (!persistentStateSafe) {
             e.setCancelled(true);
-            e.getPlayer().sendMessage(ChatColor.RED
-                    + "This storage unit has unsafe persisted state and cannot be broken until it is recovered.");
+            e.getPlayer().sendMessage(Component.text(
+                    "This storage unit has unsafe persisted state and cannot be broken until it is recovered.",
+                    NamedTextColor.RED));
             return;
         }
 
@@ -294,7 +304,7 @@ public final class IEStorageCache {
         ItemStack drop = this.storageUnit.getItem().clone();
         drop.setItemMeta(IEStorageUnit.saveToStack(
                 drop.getItemMeta(), this.storageUnit.getDisplayingItem(b), this.displayName, this.amount));
-        e.getPlayer().sendMessage(ChatColor.GREEN + "Stored items transferred to dropped item");
+        e.getPlayer().sendMessage(Component.text("Stored items transferred to dropped item", NamedTextColor.GREEN));
         drops.add(drop);
     }
 
@@ -449,27 +459,27 @@ public final class IEStorageCache {
             Sign sign = (Sign) check.getState();
             sign.setLine(0, this.signDisplay[0]);
             sign.setLine(1, this.signDisplay[1]);
-            sign.setLine(2, ChatColor.GRAY + "------------");
-            sign.setLine(3, ChatColor.YELLOW.toString() + this.amount);
+            sign.setLine(2, LEGACY_GRAY + "------------");
+            sign.setLine(3, LEGACY_YELLOW + this.amount);
             sign.update();
         }
     }
 
     private void updateStatus() {
         this.menu.replaceExistingItem(STATUS_SLOT, new ItemStackBuilder(Material.CYAN_STAINED_GLASS_PANE, meta -> {
-            meta.setDisplayName(ChatColor.AQUA + "Status");
-            List<String> lore = new ArrayList<>();
+            meta.displayName(Component.text("Status", NamedTextColor.AQUA));
+            List<Component> lore = new ArrayList<>();
             if (this.amount == 0) {
-                lore.add(ChatColors.color("&6Stored: &e0 / " + format(this.storageUnit.max) + " &7(0%)"));
+                lore.add(LEGACY_AMPERSAND.deserialize("&6Stored: &e0 / " + format(this.storageUnit.max) + " &7(0%)"));
             } else {
-                lore.add(ChatColors.color("&6Stored: &e" + format(this.amount)
+                lore.add(LEGACY_AMPERSAND.deserialize("&6Stored: &e" + format(this.amount)
                         + " / " + format(this.storageUnit.max)
                         + " &7(" + format((double) this.amount * 100.D / this.storageUnit.max) + "%)"
                 ));
             }
-            lore.add(this.voidExcess ? VOID_EXCESS_TRUE : VOID_EXCESS_FALSE);
-            lore.add(ChatColor.GRAY + "(Click to toggle)");
-            meta.setLore(lore);
+            lore.add(LEGACY_SECTION.deserialize(this.voidExcess ? VOID_EXCESS_TRUE : VOID_EXCESS_FALSE));
+            lore.add(Component.text("(Click to toggle)", NamedTextColor.GRAY));
+            meta.lore(lore);
         }).getItemStack(), false);
     }
 
