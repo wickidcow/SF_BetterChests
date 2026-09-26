@@ -79,6 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         paper_version:
           - '1.21.11'
@@ -114,14 +115,14 @@ jobs:
         run: |
           set -euo pipefail
           USER_AGENT='SF_BetterChests-CI (github.com/wickidcow/SF_BetterChests)'
-          PAPER_BUILDS=$(curl -fsSL -H "User-Agent: ${USER_AGENT}" "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
+          PAPER_BUILDS=$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -H "User-Agent: ${USER_AGENT}" "https://fill.papermc.io/v3/projects/paper/versions/${PAPER_VERSION}/builds")
           PAPER_URL=$(echo "${PAPER_BUILDS}" | jq -r 'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
           if [ -z "${PAPER_URL}" ]; then echo "No stable Paper ${PAPER_VERSION} build returned." >&2; exit 1; fi
-          curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/paper.jar "${PAPER_URL}"
-          SFL_RELEASE=$(curl -fsSL -H 'Accept: application/vnd.github+json' -H "User-Agent: ${USER_AGENT}" https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -H "User-Agent: ${USER_AGENT}" -o server/paper.jar "${PAPER_URL}"
+          SFL_RELEASE=$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -H 'Accept: application/vnd.github+json' -H "User-Agent: ${USER_AGENT}" https://api.github.com/repos/wickidcow/Slimefun-Legacy/releases/latest)
           SFL_URL=$(echo "${SFL_RELEASE}" | jq -r '.assets[] | select(.name | startswith("Slimefun-Legacy") and endswith(".jar")) | .browser_download_url' | head -n 1)
           if [ -z "${SFL_URL}" ] || [ "${SFL_URL}" = 'null' ]; then exit 1; fi
-          curl -fsSL -H "User-Agent: ${USER_AGENT}" -o server/plugins/Slimefun.jar "${SFL_URL}"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -H "User-Agent: ${USER_AGENT}" -o server/plugins/Slimefun.jar "${SFL_URL}"
       - name: Start Paper and verify plugin enable
         shell: bash
         run: |
