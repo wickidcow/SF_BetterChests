@@ -147,7 +147,7 @@ public final class IEStorageCache {
         // interact handler
         menu.addMenuClickHandler(INTERACT_SLOT, (p, slot, item, action) -> {
             if (!persistentStateSafe) {
-                p.sendMessage(ChatColor.RED + "This storage unit is frozen because its persisted state needs recovery.");
+                p.sendMessage(Component.text("This storage unit is frozen because its persisted state needs recovery.", NamedTextColor.RED));
                 return false;
             }
 
@@ -224,13 +224,13 @@ public final class IEStorageCache {
         }
 
         String color;
-        if (len >= 2 && name.charAt(0) == ChatColor.COLOR_CHAR) {
+        if (len >= 2 && name.charAt(0) == LEGACY_COLOR_CHAR) {
             char second = name.charAt(1);
             if (len >= 14 && second == 'x') {
                 color = name.substring(0, 14);
             } else {
                 color = new String(new char[]{
-                        ChatColor.COLOR_CHAR, second
+                        LEGACY_COLOR_CHAR, second
                 });
             }
         } else {
@@ -238,7 +238,7 @@ public final class IEStorageCache {
         }
 
         if (name.length() <= 15) {
-            this.signDisplay[0] = color != null ? name : ChatColor.WHITE + name;
+            this.signDisplay[0] = color != null ? name : LEGACY_WHITE + name;
             this.signDisplay[1] = "";
             return;
         }
@@ -247,7 +247,7 @@ public final class IEStorageCache {
         int i = 1;
         StringBuilder firstLine = new StringBuilder();
         if (color == null) {
-            firstLine.append(ChatColor.WHITE);
+            firstLine.append(LEGACY_WHITE);
         }
         firstLine.append(words[0]);
         while (i < words.length && words[i].length() + firstLine.length() < 15) {
@@ -258,9 +258,9 @@ public final class IEStorageCache {
         if (i < words.length) {
             StringBuilder secondLine = new StringBuilder();
             String first = words[i++];
-            if (first.length() <= 1 || first.charAt(0) != ChatColor.COLOR_CHAR) {
+            if (first.length() <= 1 || first.charAt(0) != LEGACY_COLOR_CHAR) {
                 if (color == null) {
-                    secondLine.append(ChatColor.WHITE);
+                    secondLine.append(LEGACY_WHITE);
                 } else {
                     secondLine.append(color);
                 }
