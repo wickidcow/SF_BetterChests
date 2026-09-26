@@ -12,21 +12,19 @@ import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Base64;
-import java.util.List;
 import java.util.Locale;
 
 /**
  * Persistent drawer data layer.
  *
  * <p>Block contents are stored in Slimefun's block database, not Bukkit runtime
- * metadata. Portable drawer items use Bukkit/Paper PDC. The legacy metadata and
- * display-entity migration code exists so Dev-16 drawers can be upgraded in place.</p>
+ * metadata. Portable drawer items use Bukkit/Paper PDC. Persisted Dev-16 display
+ * entities remain the legacy recovery source so old drawers can be upgraded in place.</p>
  */
 public final class DrawerStorage {
 
@@ -34,9 +32,6 @@ public final class DrawerStorage {
     public static final String COUNT_KEY = "bc_drawer_count_v2";
     public static final String DATA_VERSION_KEY = "bc_drawer_data_version";
     private static final String DATA_VERSION = "2";
-
-    private static final String LEGACY_ITEM_METADATA = "bc_drawer_item";
-    private static final String LEGACY_COUNT_METADATA = "bc_drawer_count";
 
     private DrawerStorage() {
     }
@@ -198,20 +193,16 @@ public final class DrawerStorage {
     }
 
     private static DrawerData readLegacyCandidate(Block block) {
-        ItemStack item = readLegacyMetadataItem(block);
-        long count = readLegacyMetadataCount(block);
-
-        // Runtime metadata is lost on restart. Dev-16 also mirrored the value in
-        // persistent display entities, so recover from those when they are already loaded.
-        if ((item == null || count <= 0) && block.getChunk().isEntitiesLoaded()) {
-            LegacyDisplayData displayData = readLegacyDisplays(block);
-            if (item == null) {
-                item = displayData.item();
-            }
-            if (count <= 0) {
-                count = displayData.count();
-            }
+        // Bukkit runtime metadata is non-persistent and deprecated. Dev-16 mirrored the
+        // recoverable item/count state into persistent display entities, which remain
+        // available after the restart required to install an updated plugin jar.
+        if (!block.getChunk().isEntitiesLoaded()) {
+            return DrawerData.empty();
         }
+
+        LegacyDisplayData displayData = readLegacyDisplays(block);
+        ItemStack item = displayData.item();
+        long count = displayData.count();
 
         if (item == null || item.getType() == Material.AIR || item.getType() == Material.BARRIER || count <= 0) {
             return DrawerData.empty();
@@ -219,28 +210,6 @@ public final class DrawerStorage {
 
         item.setAmount(1);
         return new DrawerData(item, count);
-    }
-
-    private static @Nullable ItemStack readLegacyMetadataItem(Block block) {
-        List<MetadataValue> values = block.getMetadata(LEGACY_ITEM_METADATA);
-        for (MetadataValue value : values) {
-            Object raw = value.value();
-            if (raw instanceof ItemStack stack && stack.getType() != Material.AIR) {
-                return MutableItemStacks.copyWithAmount(stack, 1);
-            }
-        }
-        return null;
-    }
-
-    private static long readLegacyMetadataCount(Block block) {
-        List<MetadataValue> values = block.getMetadata(LEGACY_COUNT_METADATA);
-        for (MetadataValue value : values) {
-            long count = value.asLong();
-            if (count > 0) {
-                return count;
-            }
-        }
-        return 0;
     }
 
     private static LegacyDisplayData readLegacyDisplays(Block block) {
