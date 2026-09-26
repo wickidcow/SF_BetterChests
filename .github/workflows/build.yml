@@ -92,7 +92,7 @@ jobs:
       - name: Prepare plugin directory
         run: mkdir -p server/plugins/_artifact
       - name: Download validated BetterChests JAR
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.output_name }}
           path: server/plugins/_artifact
@@ -152,7 +152,7 @@ jobs:
       - name: Prepare release directory
         run: mkdir -p dist/_artifact
       - name: Download validated JAR
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.output_name }}
           path: dist/_artifact
