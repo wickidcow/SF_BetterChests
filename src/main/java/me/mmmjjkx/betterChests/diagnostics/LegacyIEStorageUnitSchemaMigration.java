@@ -3,7 +3,9 @@ package me.mmmjjkx.betterChests.diagnostics;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -21,10 +23,13 @@ import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 /** State-preserving English presentation migration for portable BetterChests IE Storage Units. */
 final class LegacyIEStorageUnitSchemaMigration {
+
+    private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
 
     static final String CANDIDATE_TYPE = "betterchests-ie-storage-english-presentation";
     static final Set<String> ITEM_IDS = createItemIds();
@@ -86,26 +91,29 @@ final class LegacyIEStorageUnitSchemaMigration {
         }
 
         ItemMeta canonical = registered.getItem().getItemMeta();
-        String name = canonical.hasDisplayName() && !containsCjk(canonical.getDisplayName())
-            ? canonical.getDisplayName()
-            : ChatColor.YELLOW + humanize(slimefunId.replace("BC_", ""));
+        Component canonicalName = canonical.hasDisplayName() ? canonical.displayName() : null;
+        Component name = canonicalName != null && !containsCjk(canonicalName)
+            ? canonicalName
+            : Component.text(humanize(slimefunId.replace("BC_", "")), NamedTextColor.YELLOW);
 
-        List<String> lore = canonical.hasLore() && canonical.getLore() != null
-            ? new ArrayList<>(canonical.getLore())
+        List<Component> canonicalLore = canonical.hasLore() ? canonical.lore() : null;
+        List<Component> lore = canonicalLore != null
+            ? new ArrayList<>(canonicalLore)
             : new ArrayList<>();
         lore.removeIf(LegacyIEStorageUnitSchemaMigration::looksLikeStoredLine);
         if (state.storedItem() != null) {
-            lore.add(ChatColor.GOLD + "Stored: " + englishItemName(state.storedItem())
-                + ChatColor.YELLOW + " x " + state.amount());
+            lore.add(Component.text("Stored: ", NamedTextColor.GOLD)
+                .append(Component.text(englishItemName(state.storedItem())))
+                .append(Component.text(" x " + state.amount(), NamedTextColor.YELLOW)));
         }
 
-        boolean changed = !name.equals(meta.getDisplayName()) || !lore.equals(meta.getLore());
+        boolean changed = !Objects.equals(name, meta.displayName()) || !Objects.equals(lore, meta.lore());
         if (!changed) {
             return false;
         }
 
-        meta.setDisplayName(name);
-        meta.setLore(lore);
+        meta.displayName(name);
+        meta.lore(lore);
         stack.setItemMeta(meta);
         return true;
     }
@@ -155,24 +163,26 @@ final class LegacyIEStorageUnitSchemaMigration {
         SlimefunItem sfItem = SlimefunItem.getByItem(item);
         if (sfItem != null) {
             ItemMeta canonical = sfItem.getItem().getItemMeta();
-            if (canonical.hasDisplayName() && !containsCjk(canonical.getDisplayName())) {
-                return ChatColor.stripColor(canonical.getDisplayName());
+            Component displayName = canonical.hasDisplayName() ? canonical.displayName() : null;
+            if (displayName != null && !containsCjk(displayName)) {
+                return PLAIN.serialize(displayName);
             }
             return humanize(sfItem.getId());
         }
 
         ItemMeta meta = item.getItemMeta();
-        if (meta.hasDisplayName() && !containsCjk(meta.getDisplayName())) {
-            return ChatColor.stripColor(meta.getDisplayName());
+        Component displayName = meta.hasDisplayName() ? meta.displayName() : null;
+        if (displayName != null && !containsCjk(displayName)) {
+            return PLAIN.serialize(displayName);
         }
         return humanize(item.getType().name());
     }
 
-    private static boolean looksLikeStoredLine(@Nullable String line) {
+    private static boolean looksLikeStoredLine(@Nullable Component line) {
         if (line == null) {
             return false;
         }
-        String plain = ChatColor.stripColor(line).trim().toLowerCase(Locale.ROOT);
+        String plain = PLAIN.serialize(line).trim().toLowerCase(Locale.ROOT);
         return plain.startsWith("stored:")
             || plain.startsWith("储存:")
             || plain.startsWith("儲存:")
@@ -181,17 +191,23 @@ final class LegacyIEStorageUnitSchemaMigration {
     }
 
     private static boolean containsCjk(@NotNull ItemMeta meta) {
-        if (meta.hasDisplayName() && containsCjk(meta.getDisplayName())) {
+        Component displayName = meta.hasDisplayName() ? meta.displayName() : null;
+        if (displayName != null && containsCjk(displayName)) {
             return true;
         }
-        if (meta.hasLore() && meta.getLore() != null) {
-            for (String line : meta.getLore()) {
+        List<Component> lore = meta.hasLore() ? meta.lore() : null;
+        if (lore != null) {
+            for (Component line : lore) {
                 if (containsCjk(line)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static boolean containsCjk(@Nullable Component component) {
+        return component != null && containsCjk(PLAIN.serialize(component));
     }
 
     private static boolean containsCjk(@Nullable String text) {
