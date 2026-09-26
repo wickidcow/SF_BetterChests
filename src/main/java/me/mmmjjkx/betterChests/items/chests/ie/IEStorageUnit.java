@@ -22,6 +22,9 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -51,6 +54,8 @@ import java.util.*;
 @ParametersAreNonnullByDefault
 @SuppressWarnings("deprecation")
 public final class IEStorageUnit extends SlimefunItem implements InventoryBlock, DistinctiveItem {
+
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
 
     static final NamespacedKey EMPTY_KEY = new NamespacedKey(BetterChests.INSTANCE, "empty"); // key for empty item
     static final NamespacedKey DISPLAY_KEY = new NamespacedKey(BetterChests.INSTANCE, "display"); // key for display item
@@ -154,10 +159,12 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
                 if (!cache.isPersistentStateSafe()) {
                     e.setCancelled(true);
                     drops.clear();
-                    e.getPlayer().sendMessage(ChatColor.RED
-                            + "This IE storage unit is frozen because its persisted state needs recovery.");
-                    e.getPlayer().sendMessage(ChatColor.YELLOW
-                            + "Run /sf doctor addons scan before changing or breaking this block.");
+                    e.getPlayer().sendMessage(Component.text(
+                            "This IE storage unit is frozen because its persisted state needs recovery.",
+                            NamedTextColor.RED));
+                    e.getPlayer().sendMessage(Component.text(
+                            "Run /sf doctor addons scan before changing or breaking this block.",
+                            NamedTextColor.YELLOW));
                     return;
                 }
 
@@ -223,11 +230,12 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
     }
 
     static ItemMeta saveToStack(ItemMeta meta, ItemStack displayItem, String displayName, int amount) {
-        List<String> lore = meta.hasLore() && meta.getLore() != null
-                ? new ArrayList<>(meta.getLore())
+        List<Component> existingLore = meta.hasLore() ? meta.lore() : null;
+        List<Component> lore = existingLore != null
+                ? new ArrayList<>(existingLore)
                 : new ArrayList<>();
-        lore.add(ChatColor.GOLD + "Stored: " + displayName + ChatColor.YELLOW + " x " + amount);
-        meta.setLore(lore);
+        lore.add(LEGACY.deserialize("\u00A76Stored: " + displayName + "\u00A7e x " + amount));
+        meta.lore(lore);
         meta.getPersistentDataContainer().set(ITEM_KEY, ITEM_STACK, displayItem);
         meta.getPersistentDataContainer().set(AMOUNT_KEY, PersistentDataType.INTEGER, amount);
         return meta;
