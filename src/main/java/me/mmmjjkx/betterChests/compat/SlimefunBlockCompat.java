@@ -36,16 +36,30 @@ public final class SlimefunBlockCompat {
 
     @Nullable
     public static BlockMenu getBlockMenu(@Nonnull Block block) {
-        return ACCESS.getBlockMenu(block);
+        return getBlockMenu(block.getLocation());
+    }
+
+    @Nullable
+    public static BlockMenu getBlockMenu(@Nonnull Location location) {
+        return ACCESS.getBlockMenu(location);
     }
 
     @Nullable
     public static String getData(@Nonnull Block block, @Nonnull String key) {
-        return ACCESS.getData(block, key);
+        return getData(block.getLocation(), key);
     }
 
-    public static void setData(@Nonnull Block block, @Nonnull String key, @Nonnull String value) {
-        ACCESS.setData(block, key, value);
+    @Nullable
+    public static String getData(@Nonnull Location location, @Nonnull String key) {
+        return ACCESS.getData(location, key);
+    }
+
+    public static void setData(@Nonnull Block block, @Nonnull String key, @Nullable String value) {
+        setData(block.getLocation(), key, value);
+    }
+
+    public static void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
+        ACCESS.setData(location, key, value);
     }
 
     @Nonnull
@@ -61,6 +75,7 @@ public final class SlimefunBlockCompat {
             Method getSfId = blockDataType.getMethod("getSfId");
             Method getData = blockDataType.getMethod("getData", String.class);
             Method setData = blockDataType.getMethod("setData", String.class, String.class);
+            Method removeData = blockDataType.getMethod("removeData", String.class);
             Method getBlockMenu = blockDataType.getMethod("getBlockMenu");
 
             return new ModernAccess(
@@ -72,6 +87,7 @@ public final class SlimefunBlockCompat {
                     getSfId,
                     getData,
                     setData,
+                    removeData,
                     getBlockMenu);
         } catch (NoSuchMethodException | LinkageError ignored) {
             return new LegacyAccess();
@@ -83,12 +99,12 @@ public final class SlimefunBlockCompat {
         SlimefunItem getSlimefunItem(@Nonnull Block block);
 
         @Nullable
-        BlockMenu getBlockMenu(@Nonnull Block block);
+        BlockMenu getBlockMenu(@Nonnull Location location);
 
         @Nullable
-        String getData(@Nonnull Block block, @Nonnull String key);
+        String getData(@Nonnull Location location, @Nonnull String key);
 
-        void setData(@Nonnull Block block, @Nonnull String key, @Nonnull String value);
+        void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value);
     }
 
     private static final class ModernAccess implements Access {
@@ -101,6 +117,7 @@ public final class SlimefunBlockCompat {
         private final Method getSfId;
         private final Method getData;
         private final Method setData;
+        private final Method removeData;
         private final Method getBlockMenu;
 
         private ModernAccess(
@@ -112,6 +129,7 @@ public final class SlimefunBlockCompat {
                 Method getSfId,
                 Method getData,
                 Method setData,
+                Method removeData,
                 Method getBlockMenu) {
             this.getDatabaseManager = getDatabaseManager;
             this.getBlockDataController = getBlockDataController;
@@ -121,6 +139,7 @@ public final class SlimefunBlockCompat {
             this.getSfId = getSfId;
             this.getData = getData;
             this.setData = setData;
+            this.removeData = removeData;
             this.getBlockMenu = getBlockMenu;
         }
 
@@ -142,8 +161,8 @@ public final class SlimefunBlockCompat {
 
         @Override
         @Nullable
-        public BlockMenu getBlockMenu(@Nonnull Block block) {
-            Object data = getLoadedData(block.getLocation());
+        public BlockMenu getBlockMenu(@Nonnull Location location) {
+            Object data = getLoadedData(location);
             if (data == null) {
                 return null;
             }
@@ -158,8 +177,8 @@ public final class SlimefunBlockCompat {
 
         @Override
         @Nullable
-        public String getData(@Nonnull Block block, @Nonnull String key) {
-            Object data = getLoadedData(block.getLocation());
+        public String getData(@Nonnull Location location, @Nonnull String key) {
+            Object data = getLoadedData(location);
             if (data == null) {
                 return null;
             }
@@ -173,13 +192,17 @@ public final class SlimefunBlockCompat {
         }
 
         @Override
-        public void setData(@Nonnull Block block, @Nonnull String key, @Nonnull String value) {
-            Object data = getLoadedData(block.getLocation());
+        public void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
+            Object data = getLoadedData(location);
             if (data == null) {
                 return;
             }
             try {
-                setData.invoke(data, key, value);
+                if (value == null) {
+                    removeData.invoke(data, key);
+                } else {
+                    setData.invoke(data, key, value);
+                }
             } catch (IllegalAccessException exception) {
                 throw new IllegalStateException("Could not update Slimefun Legacy block data", exception);
             } catch (InvocationTargetException exception) {
@@ -220,19 +243,19 @@ public final class SlimefunBlockCompat {
 
         @Override
         @Nullable
-        public BlockMenu getBlockMenu(@Nonnull Block block) {
-            return me.mrCookieSlime.Slimefun.api.BlockStorage.getInventory(block);
+        public BlockMenu getBlockMenu(@Nonnull Location location) {
+            return me.mrCookieSlime.Slimefun.api.BlockStorage.getInventory(location);
         }
 
         @Override
         @Nullable
-        public String getData(@Nonnull Block block, @Nonnull String key) {
-            return me.mrCookieSlime.Slimefun.api.BlockStorage.getLocationInfo(block.getLocation(), key);
+        public String getData(@Nonnull Location location, @Nonnull String key) {
+            return me.mrCookieSlime.Slimefun.api.BlockStorage.getLocationInfo(location, key);
         }
 
         @Override
-        public void setData(@Nonnull Block block, @Nonnull String key, @Nonnull String value) {
-            me.mrCookieSlime.Slimefun.api.BlockStorage.addBlockInfo(block, key, value);
+        public void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
+            me.mrCookieSlime.Slimefun.api.BlockStorage.addBlockInfo(location, key, value);
         }
     }
 

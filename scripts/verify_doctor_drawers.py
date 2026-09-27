@@ -31,6 +31,11 @@ doctor = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/BetterChestsDoc
 simple_drawer = read("src/main/java/me/mmmjjkx/betterChests/items/chests/SimpleDrawer.java")
 drawer_storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
 compat = read("src/main/java/me/mmmjjkx/betterChests/compat/SlimefunBlockCompat.java")
+simple_chest = read("src/main/java/me/mmmjjkx/betterChests/items/chests/SimpleChest.java")
+ie_cache = read("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageCache.java")
+ie_unit = read("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageUnit.java")
+chest_colorer = read("src/main/java/me/mmmjjkx/betterChests/items/tools/ChestColorer.java")
+location_recorder = read("src/main/java/me/mmmjjkx/betterChests/items/tools/LocationRecorder.java")
 bridge = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java")
 plugin = read("src/main/java/me/mmmjjkx/betterChests/BetterChests.java")
 
@@ -57,8 +62,17 @@ require('SlimefunBlockCompat.getSlimefunItem(block)' in doctor and 'slimefunItem
         "Doctor scan must remain scoped to registered BetterChests drawer blocks through the compatibility reader")
 reject('BlockStorage.' in doctor,
        "Doctor scan must not call deprecated BlockStorage directly")
-reject('BlockStorage.' in simple_drawer or 'BlockStorage.' in drawer_storage,
-       "BetterChests runtime storage paths must not call deprecated BlockStorage directly")
+reject(
+        any('BlockStorage.' in source for source in (
+            simple_drawer,
+            drawer_storage,
+            simple_chest,
+            ie_cache,
+            ie_unit,
+            chest_colorer,
+            location_recorder,
+        )),
+        "BetterChests runtime storage paths must not call deprecated BlockStorage directly")
 require('class LegacyAccess' in compat and 'BlockStorage' in compat,
         "RC-37 BlockStorage fallback must remain isolated inside SlimefunBlockCompat")
 require('DrawerStorage.inspect(block)' in doctor,

@@ -13,11 +13,10 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import me.mmmjjkx.betterChests.BCGroups;
 import me.mmmjjkx.betterChests.BetterChests;
+import me.mmmjjkx.betterChests.compat.LegacyBlockTickerCompat;
+import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.ItemStackBuilder;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
@@ -52,8 +51,7 @@ import java.util.*;
  * @author Mooy1, mmmjjkx
  */
 @ParametersAreNonnullByDefault
-@SuppressWarnings("deprecation")
-public final class IEStorageUnit extends SlimefunItem implements InventoryBlock, DistinctiveItem {
+public final class IEStorageUnit extends SlimefunItem implements LegacyInventoryBlock, DistinctiveItem {
 
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
 
@@ -125,7 +123,7 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
         super(BCGroups.STORAGES, item, RecipeType.ENHANCED_CRAFTING_TABLE, recipe);
         this.max = max;
 
-        addItemHandler(new BlockTicker() {
+        addItemHandler(new LegacyBlockTickerCompat() {
 
             @Override
             public boolean isSynchronized() {
@@ -133,7 +131,7 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
             }
 
             @Override
-            public void tick(Block b, SlimefunItem item, Config data) {
+            protected void tickCompat(Block b, SlimefunItem item) {
                 IEStorageCache cache = caches.get(b.getLocation());
                 if (cache != null) {
                     cache.tick(b);
@@ -144,7 +142,7 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
 
             @Override
             public void onPlayerBreak(BlockBreakEvent e, ItemStack item, List<ItemStack> drops) {
-                BlockMenu menu = BlockStorage.getInventory(e.getBlock());
+                BlockMenu menu = SlimefunBlockCompat.getBlockMenu(e.getBlock());
                 if (menu == null) {
                     drops.add(getItem().clone());
                     return;
@@ -242,7 +240,7 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
     }
 
     public ItemStack getDisplayingItem(Block block) {
-        BlockMenu menu = BlockStorage.getInventory(block);
+        BlockMenu menu = SlimefunBlockCompat.getBlockMenu(block);
         ItemStack display = menu == null ? null : menu.getItemInSlot(DISPLAY_SLOT);
         return display == null ? new ItemStack(Material.BARRIER) : display;
     }
@@ -281,7 +279,7 @@ public final class IEStorageUnit extends SlimefunItem implements InventoryBlock,
         ItemStack stored = data.getFirstValue().clone();
         int storedAmount = data.getSecondValue();
         Bukkit.getScheduler().runTask(BetterChests.INSTANCE, () -> {
-            BlockMenu menu = BlockStorage.getInventory(b);
+            BlockMenu menu = SlimefunBlockCompat.getBlockMenu(b);
             if (menu == null) {
                 BetterChests.INSTANCE.getLogger().warning("Could not restore portable IE storage at " + b.getLocation());
                 return;

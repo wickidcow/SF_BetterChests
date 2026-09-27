@@ -6,8 +6,8 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import me.mmmjjkx.betterChests.BCGroups;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
+import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -19,8 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.IntStream;
 
-@SuppressWarnings("deprecation")
-public class SimpleChest extends SlimefunItem implements InventoryBlock {
+public class SimpleChest extends SlimefunItem implements LegacyInventoryBlock {
     private final int size;
 
     public SimpleChest(int size, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -49,14 +48,13 @@ public class SimpleChest extends SlimefunItem implements InventoryBlock {
             }
 
             private void drop(Block b) {
-                BlockMenu menu = BlockStorage.getInventory(b);
+                BlockMenu menu = SlimefunBlockCompat.getBlockMenu(b);
                 if (menu != null) {
                     menu.dropItems(b.getLocation(), getSlots());
                 }
 
                 World world = b.getWorld();
-                ItemStack item = getItem().clone();
-                item.setType(b.getType());
+                ItemStack item = getItem().clone().withType(b.getType());
                 world.dropItemNaturally(b.getLocation(), item);
             }
         });

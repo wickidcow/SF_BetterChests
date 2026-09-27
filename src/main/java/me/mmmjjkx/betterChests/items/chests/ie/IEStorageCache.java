@@ -4,9 +4,8 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.ItemUtils;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import me.mmmjjkx.betterChests.BetterChests;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.ItemStackBuilder;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
@@ -39,7 +38,6 @@ import static me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit.*;
  *
  * @author Mooy1, mmmjjkx
  */
-@SuppressWarnings("deprecation")
 public final class IEStorageCache {
 
     private static final char LEGACY_COLOR_CHAR = '\u00A7';
@@ -128,7 +126,7 @@ public final class IEStorageCache {
             }
 
             this.voidExcess = !this.voidExcess;
-            BlockStorage.addBlockInfo(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
+            SlimefunBlockCompat.setData(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
             if (item != null) {
                 ItemMeta itemMeta = item.getItemMeta();
                 List<Component> lore = itemMeta.lore() == null
@@ -309,9 +307,8 @@ public final class IEStorageCache {
     }
 
     void reloadData() {
-        Config config = BlockStorage.getLocationInfo(this.menu.getLocation());
-        String stored = config == null ? null : config.getString(STORED_AMOUNT);
-        this.voidExcess = config != null && "true".equals(config.getString(VOID_EXCESS));
+        String stored = SlimefunBlockCompat.getData(this.menu.getLocation(), STORED_AMOUNT);
+        this.voidExcess = "true".equals(SlimefunBlockCompat.getData(this.menu.getLocation(), VOID_EXCESS));
         this.persistentStateSafe = true;
         this.persistentStateProblem = null;
 
@@ -441,7 +438,7 @@ public final class IEStorageCache {
         output();
 
         // store amount
-        BlockStorage.addBlockInfo(this.menu.getLocation(), STORED_AMOUNT, String.valueOf(this.amount));
+        SlimefunBlockCompat.setData(this.menu.getLocation(), STORED_AMOUNT, String.valueOf(this.amount));
 
         // status
         if (this.menu.hasViewer()) {

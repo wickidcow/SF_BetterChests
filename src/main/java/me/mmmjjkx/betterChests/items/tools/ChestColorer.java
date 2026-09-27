@@ -13,7 +13,7 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import me.mmmjjkx.betterChests.BCGroups;
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.items.chests.SimpleChest;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -95,7 +95,7 @@ public class ChestColorer extends SimpleSlimefunItem<ItemUseHandler> implements 
             } else {
                 if (block.isPresent()) {
                     Block b = block.get();
-                    SlimefunItem sfItem = BlockStorage.check(b);
+                    SlimefunItem sfItem = SlimefunBlockCompat.getSlimefunItem(b);
                     if (sfItem instanceof SimpleChest) {
                         if (getItemCharge(item) >= 10) {
                             removeItemCharge(item, 10);
