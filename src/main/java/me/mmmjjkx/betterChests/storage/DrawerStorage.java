@@ -1,6 +1,7 @@
 package me.mmmjjkx.betterChests.storage;
 
 import me.mmmjjkx.betterChests.BetterChests;
+import me.mmmjjkx.betterChests.utils.LegacyText;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import org.bukkit.Location;
@@ -226,7 +227,7 @@ public final class DrawerStorage {
                     item = MutableItemStacks.copyWithAmount(candidate, 1);
                 }
             } else if (entity instanceof TextDisplay display) {
-                String text = display.getText();
+                String text = LegacyText.plain(display.text());
                 long parsed = parseCount(text);
                 if (parsed > count) {
                     count = parsed;

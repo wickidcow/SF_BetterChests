@@ -53,6 +53,10 @@ public final class LegacyText {
      * Repairs an old component only when its visible text still contains raw
      * legacy color codes. Already-correct components are returned unchanged.
      */
+    public static String plain(Component component) {
+        return component == null ? "" : PLAIN_SERIALIZER.serialize(component);
+    }
+
     public static Component repair(Component original) {
         if (original == null) {
             return null;
