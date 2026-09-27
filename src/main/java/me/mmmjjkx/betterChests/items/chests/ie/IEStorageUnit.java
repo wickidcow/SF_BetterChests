@@ -15,6 +15,7 @@ import me.mmmjjkx.betterChests.BCGroups;
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.compat.LegacyBlockTickerCompat;
 import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
+import me.mmmjjkx.betterChests.compat.LegacyItemStackSerialization;
 import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.ItemStackBuilder;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
@@ -34,15 +35,11 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataAdapterContext;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.util.io.BukkitObjectInputStream;
-import org.bukkit.util.io.BukkitObjectOutputStream;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.util.*;
 
 /**
@@ -107,14 +104,13 @@ public final class IEStorageUnit extends SlimefunItem implements LegacyInventory
                 return item;
             } catch (RuntimeException modernFormatFailed) {
                 // Backward compatibility for portable units written by Dev-16.
-                try (BukkitObjectInputStream input = new BukkitObjectInputStream(new ByteArrayInputStream(arr))) {
-                    ItemStack item = (ItemStack) input.readObject();
+                ItemStack item = LegacyItemStackSerialization.deserialize(arr);
+                if (item != null) {
                     item.setAmount(1);
                     return item;
-                } catch (Exception legacyFormatFailed) {
-                    BetterChests.INSTANCE.getLogger().warning("Could not decode a portable IE storage item.");
-                    return new ItemStackBuilder(Material.STONE, "&cERROR").getItemStack();
                 }
+                BetterChests.INSTANCE.getLogger().warning("Could not decode a portable IE storage item.");
+                return new ItemStackBuilder(Material.STONE, "&cERROR").getItemStack();
             }
         }
     };
