@@ -80,7 +80,8 @@ require('LegacyDoctorBridge.register(this)' in plugin and 'LegacyDoctorBridge.un
 
 require('SlimefunBlockDataCompat.read(block, STORED_AMOUNT)' in ie_inspector,
         "IE storage Doctor inspection must use the storage compatibility boundary")
-reject('BlockStorage' in ie_inspector or 'CSCoreLibPlugin.Configuration.Config' in ie_inspector,
+reject('import me.mrCookieSlime.Slimefun.api.BlockStorage;' in ie_inspector or 'BlockStorage.' in ie_inspector
+       or 'CSCoreLibPlugin.Configuration.Config' in ie_inspector,
        "IE storage Doctor inspector must not directly use deprecated BlockStorage/Config APIs")
 require('getDatabaseManager' in storage_compat and 'getBlockDataController' in storage_compat,
         "storage compatibility boundary must prefer Slimefun Legacy BlockDataController")

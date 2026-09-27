@@ -32,7 +32,7 @@ final class IEStorageDoctorInspector {
             } catch (NumberFormatException exception) {
                 return new Result(
                         Status.MALFORMED_COUNT,
-                        "IE storage count is malformed; the raw BlockStorage value was left unchanged.");
+                        "IE storage count is malformed; the raw stored value was left unchanged.");
             }
         }
 
