@@ -18,9 +18,9 @@ import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.storage.DrawerData;
 import me.mmmjjkx.betterChests.storage.DrawerDisplayManager;
 import me.mmmjjkx.betterChests.storage.DrawerStorage;
+import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
@@ -52,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * stores portable contents in PDC, and never drops an invalid multi-million
  * item stack when the block is broken.</p>
  */
-public class SimpleDrawer extends SlimefunItem implements NotHopperable, InventoryBlock {
+public class SimpleDrawer extends SlimefunItem implements NotHopperable, LegacyInventoryBlock {
 
     private static final int CARGO_INPUT_SLOT = 0;
     private static final int CARGO_OUTPUT_SLOT = 1;
@@ -148,7 +148,7 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, Invento
 
                     // The output slot is only a mirror of DrawerStorage and must never drop.
                     // Preserve only an exceptional unprocessed input buffer, if one exists.
-                    BlockMenu cargoMenu = BlockStorage.getInventory(block);
+                    BlockMenu cargoMenu = SlimefunBlockCompat.getBlockMenu(block);
                     if (cargoMenu != null) {
                         ItemStack buffered = cargoMenu.getItemInSlot(CARGO_INPUT_SLOT);
                         if (buffered != null && !buffered.getType().isAir() && buffered.getAmount() > 0) {
@@ -416,12 +416,12 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, Invento
         Bukkit.getScheduler().runTask(BetterChests.INSTANCE, () -> {
             CARGO_REFRESH_PENDING.remove(key);
 
-            if (!(BlockStorage.check(block) instanceof SimpleDrawer)) {
+            if (!(SlimefunBlockCompat.getSlimefunItem(block) instanceof SimpleDrawer)) {
                 CARGO_OFFERED.remove(key);
                 return;
             }
 
-            BlockMenu currentMenu = BlockStorage.getInventory(block);
+            BlockMenu currentMenu = SlimefunBlockCompat.getBlockMenu(block);
             if (currentMenu != null) {
                 syncCargoOutput(block, currentMenu);
             }
@@ -536,12 +536,12 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, Invento
 
     /** Returns true when the block is one of this addon's drawers. */
     public static boolean isDrawer(Block block) {
-        return BlockStorage.check(block) instanceof SimpleDrawer;
+        return SlimefunBlockCompat.getSlimefunItem(block) instanceof SimpleDrawer;
     }
 
     /** Rebuilds a drawer's visual entities and migrates old Dev-16 data if found. */
     public static void repair(Block block) {
-        if (BlockStorage.check(block) instanceof SimpleDrawer) {
+        if (SlimefunBlockCompat.getSlimefunItem(block) instanceof SimpleDrawer) {
             DrawerDisplayManager.repair(block);
         }
     }
@@ -655,7 +655,7 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, Invento
             // stack is best-effort only for legacy integrations.
             try {
                 if (remainder <= 0) {
-                    item.setType(Material.AIR);
+                    item.setAmount(0);
                 } else {
                     item.setAmount(remainder);
                 }

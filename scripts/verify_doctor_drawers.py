@@ -28,6 +28,9 @@ def reject(value: bool, message: str) -> None:
 
 storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
 doctor = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/BetterChestsDoctor.java")
+simple_drawer = read("src/main/java/me/mmmjjkx/betterChests/items/chests/SimpleDrawer.java")
+drawer_storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
+compat = read("src/main/java/me/mmmjjkx/betterChests/compat/SlimefunBlockCompat.java")
 bridge = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java")
 plugin = read("src/main/java/me/mmmjjkx/betterChests/BetterChests.java")
 
@@ -50,10 +53,14 @@ require('world.getLoadedChunks()' in doctor,
         "BetterChests Doctor must scan only already-loaded chunks")
 require('chunk.getTileEntities()' in doctor,
         "BetterChests Doctor must inspect already-loaded tile entities")
-require('SlimefunDoctorBlockAccess.getSlimefunItem(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
+require('SlimefunBlockCompat.getSlimefunItem(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
         "Doctor scan must remain scoped to registered BetterChests drawer blocks through the compatibility reader")
 reject('BlockStorage.' in doctor,
        "Doctor scan must not call deprecated BlockStorage directly")
+reject('BlockStorage.' in simple_drawer or 'BlockStorage.' in drawer_storage,
+       "BetterChests runtime storage paths must not call deprecated BlockStorage directly")
+require('class LegacyReader' in compat and 'BlockStorage' in compat,
+        "RC-37 BlockStorage fallback must remain isolated inside SlimefunBlockCompat")
 require('DrawerStorage.inspect(block)' in doctor,
         "Doctor scan must classify drawer state read-only before repair")
 require('repair && DrawerStorage.migrateLegacyIfRecoverable(block)' in doctor,

@@ -2,6 +2,7 @@ package me.mmmjjkx.betterChests.diagnostics;
 
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.items.chests.SimpleDrawer;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit;
 import me.mmmjjkx.betterChests.storage.DrawerStorage;
 import org.bukkit.Bukkit;
@@ -38,7 +39,7 @@ final class BetterChestsDoctor {
                 for (BlockState state : chunk.getTileEntities()) {
                     Block block = state.getBlock();
                     try {
-                        var slimefunItem = SlimefunDoctorBlockAccess.getSlimefunItem(block);
+                        var slimefunItem = SlimefunBlockCompat.getSlimefunItem(block);
                         if (slimefunItem instanceof SimpleDrawer) {
                             scanned++;
                             DrawerStorage.Inspection inspection = DrawerStorage.inspect(block);
