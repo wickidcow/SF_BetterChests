@@ -29,6 +29,8 @@ def reject(value: bool, message: str) -> None:
 storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
 doctor = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/BetterChestsDoctor.java")
 bridge = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java")
+ie_inspector = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/IEStorageDoctorInspector.java")
+storage_compat = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/SlimefunBlockDataCompat.java")
 plugin = read("src/main/java/me/mmmjjkx/betterChests/BetterChests.java")
 
 require('ITEM_KEY = "bc_drawer_item_v2"' in storage and 'COUNT_KEY = "bc_drawer_count_v2"' in storage,
@@ -75,6 +77,17 @@ require('Bukkit.getServicesManager().unregisterAll(plugin)' in bridge,
         "Doctor services must unregister cleanly")
 require('LegacyDoctorBridge.register(this)' in plugin and 'LegacyDoctorBridge.unregister(this)' in plugin,
         "BetterChests lifecycle must register and unregister the Doctor bridge")
+
+require('SlimefunBlockDataCompat.read(block, STORED_AMOUNT)' in ie_inspector,
+        "IE storage Doctor inspection must use the storage compatibility boundary")
+reject('BlockStorage' in ie_inspector or 'CSCoreLibPlugin.Configuration.Config' in ie_inspector,
+       "IE storage Doctor inspector must not directly use deprecated BlockStorage/Config APIs")
+require('getDatabaseManager' in storage_compat and 'getBlockDataController' in storage_compat,
+        "storage compatibility boundary must prefer Slimefun Legacy BlockDataController")
+require('isDataLoaded' in storage_compat and 'loadBlockData' in storage_compat,
+        "modern Doctor storage reads must preserve synchronous loaded-data semantics")
+require('LegacyBlockStorageAccess' in storage_compat and '@SuppressWarnings("deprecation")' in storage_compat,
+        "RC-37 fallback must remain isolated and explicitly documented")
 
 if ERRORS:
     print("BetterChests Doctor verification failed:")
