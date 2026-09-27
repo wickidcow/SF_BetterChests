@@ -50,8 +50,10 @@ require('world.getLoadedChunks()' in doctor,
         "BetterChests Doctor must scan only already-loaded chunks")
 require('chunk.getTileEntities()' in doctor,
         "BetterChests Doctor must inspect already-loaded tile entities")
-require('BlockStorage.check(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
-        "Doctor scan must remain scoped to registered BetterChests drawer blocks")
+require('SlimefunDoctorBlockAccess.getSlimefunItem(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
+        "Doctor scan must remain scoped to registered BetterChests drawer blocks through the compatibility reader")
+reject('BlockStorage.' in doctor,
+       "Doctor scan must not call deprecated BlockStorage directly")
 require('DrawerStorage.inspect(block)' in doctor,
         "Doctor scan must classify drawer state read-only before repair")
 require('repair && DrawerStorage.migrateLegacyIfRecoverable(block)' in doctor,

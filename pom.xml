@@ -96,6 +96,10 @@
                     <release>${maven.compiler.release}</release>
                     <parameters>true</parameters>
                     <showWarnings>true</showWarnings>
+                    <showDeprecation>true</showDeprecation>
+                    <compilerArgs>
+                        <arg>-Xlint:deprecation</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
