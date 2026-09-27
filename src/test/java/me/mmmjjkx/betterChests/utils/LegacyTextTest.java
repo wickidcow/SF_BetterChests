@@ -41,6 +41,11 @@ class LegacyTextTest {
     }
 
     @Test
+    void serializesAdventureTextForLegacyDisplayRecovery() {
+        assertEquals("12,345", LegacyText.plain(Component.text("12,345")));
+    }
+
+    @Test
     void leavesAlreadyFormattedComponentsUntouched() {
         Component correct = Component.text("Already formatted");
         assertSame(correct, LegacyText.repair(correct));

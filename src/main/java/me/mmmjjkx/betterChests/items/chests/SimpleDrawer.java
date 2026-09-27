@@ -19,7 +19,8 @@ import me.mmmjjkx.betterChests.storage.DrawerData;
 import me.mmmjjkx.betterChests.storage.DrawerDisplayManager;
 import me.mmmjjkx.betterChests.storage.DrawerStorage;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
+import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
+import me.mmmjjkx.betterChests.compat.LegacyItemStackCompat;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -52,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * stores portable contents in PDC, and never drops an invalid multi-million
  * item stack when the block is broken.</p>
  */
-public class SimpleDrawer extends SlimefunItem implements NotHopperable, InventoryBlock {
+public class SimpleDrawer extends SlimefunItem implements NotHopperable, LegacyInventoryBlock {
 
     private static final int CARGO_INPUT_SLOT = 0;
     private static final int CARGO_OUTPUT_SLOT = 1;
@@ -655,7 +656,7 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, Invento
             // stack is best-effort only for legacy integrations.
             try {
                 if (remainder <= 0) {
-                    item.setType(Material.AIR);
+                    LegacyItemStackCompat.clearToAir(item);
                 } else {
                     item.setAmount(remainder);
                 }

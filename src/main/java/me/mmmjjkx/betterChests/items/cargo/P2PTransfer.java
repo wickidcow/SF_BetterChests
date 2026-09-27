@@ -4,7 +4,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import me.mmmjjkx.betterChests.BCGroups;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
+import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Collection;
@@ -19,7 +19,7 @@ import java.util.List;
  * inert class preserves binary compatibility without enabling the broken machine.
  * It can be redesigned and registered in a later release after dedicated tests.</p>
  */
-public final class P2PTransfer extends SlimefunItem implements InventoryBlock {
+public final class P2PTransfer extends SlimefunItem implements LegacyInventoryBlock {
 
     public P2PTransfer(SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(BCGroups.CARGO, item, recipeType, recipe);
