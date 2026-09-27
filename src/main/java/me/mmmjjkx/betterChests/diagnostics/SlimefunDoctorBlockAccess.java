@@ -66,7 +66,7 @@ final class SlimefunDoctorBlockAccess {
         }
     }
 
-    private record BlockValue(@Nullable String value, @Nullable BlockMenu menu) {
+    record BlockValue(@Nullable String value, @Nullable BlockMenu menu) {
     }
 
     private interface Reader {
