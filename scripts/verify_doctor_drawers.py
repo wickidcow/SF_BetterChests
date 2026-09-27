@@ -59,7 +59,7 @@ reject('BlockStorage.' in doctor,
        "Doctor scan must not call deprecated BlockStorage directly")
 reject('BlockStorage.' in simple_drawer or 'BlockStorage.' in drawer_storage,
        "BetterChests runtime storage paths must not call deprecated BlockStorage directly")
-require('class LegacyReader' in compat and 'BlockStorage' in compat,
+require('class LegacyAccess' in compat and 'BlockStorage' in compat,
         "RC-37 BlockStorage fallback must remain isolated inside SlimefunBlockCompat")
 require('DrawerStorage.inspect(block)' in doctor,
         "Doctor scan must classify drawer state read-only before repair")
