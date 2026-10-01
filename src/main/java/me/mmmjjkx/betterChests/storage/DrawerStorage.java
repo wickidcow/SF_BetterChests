@@ -3,7 +3,7 @@ package me.mmmjjkx.betterChests.storage;
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.utils.LegacyText;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -61,8 +61,8 @@ public final class DrawerStorage {
 
     /** Performs a read-only classification of one drawer block. */
     public static Inspection inspect(Block block) {
-        String encoded = BlockStorage.getLocationInfo(block.getLocation(), ITEM_KEY);
-        String countText = BlockStorage.getLocationInfo(block.getLocation(), COUNT_KEY);
+        String encoded = SlimefunBlockCompat.getData(block, ITEM_KEY);
+        String countText = SlimefunBlockCompat.getData(block, COUNT_KEY);
 
         if (encoded == null && countText == null) {
             DrawerData legacy = readLegacyCandidate(block);
@@ -127,9 +127,9 @@ public final class DrawerStorage {
 
     public static void write(Block block, DrawerData data) {
         if (data == null || data.isEmpty()) {
-            BlockStorage.addBlockInfo(block, ITEM_KEY, "");
-            BlockStorage.addBlockInfo(block, COUNT_KEY, "0");
-            BlockStorage.addBlockInfo(block, DATA_VERSION_KEY, DATA_VERSION);
+            SlimefunBlockCompat.setData(block, ITEM_KEY, "");
+            SlimefunBlockCompat.setData(block, COUNT_KEY, "0");
+            SlimefunBlockCompat.setData(block, DATA_VERSION_KEY, DATA_VERSION);
             return;
         }
 
@@ -141,9 +141,9 @@ public final class DrawerStorage {
 
         item.setAmount(1);
         String encoded = Base64.getEncoder().encodeToString(item.serializeAsBytes());
-        BlockStorage.addBlockInfo(block, ITEM_KEY, encoded);
-        BlockStorage.addBlockInfo(block, COUNT_KEY, Long.toString(data.count()));
-        BlockStorage.addBlockInfo(block, DATA_VERSION_KEY, DATA_VERSION);
+        SlimefunBlockCompat.setData(block, ITEM_KEY, encoded);
+        SlimefunBlockCompat.setData(block, COUNT_KEY, Long.toString(data.count()));
+        SlimefunBlockCompat.setData(block, DATA_VERSION_KEY, DATA_VERSION);
     }
 
     public static void clear(Block block) {

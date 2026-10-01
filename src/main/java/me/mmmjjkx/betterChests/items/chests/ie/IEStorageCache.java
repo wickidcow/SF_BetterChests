@@ -4,9 +4,9 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.ItemUtils;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import me.mmmjjkx.betterChests.BetterChests;
+import me.mmmjjkx.betterChests.compat.LegacyMenuCompat;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.ItemStackBuilder;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
@@ -15,6 +15,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.block.data.type.WallSign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -39,7 +40,6 @@ import static me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit.*;
  *
  * @author Mooy1, mmmjjkx
  */
-@SuppressWarnings("deprecation")
 public final class IEStorageCache {
 
     private static final char LEGACY_COLOR_CHAR = '\u00A7';
@@ -120,7 +120,7 @@ public final class IEStorageCache {
         }
 
         // void excess handler
-        menu.addMenuClickHandler(STATUS_SLOT, (p, slot, item, action) -> {
+        LegacyMenuCompat.addClickHandler(menu, STATUS_SLOT, (p, slot, item, action) -> {
             if (!persistentStateSafe) {
                 p.sendMessage(Component.text("This storage unit is frozen because its persisted state needs recovery.", NamedTextColor.RED));
                 p.sendMessage(Component.text("Run /sf doctor addons scan and restore from backup if needed.", NamedTextColor.YELLOW));
@@ -128,7 +128,7 @@ public final class IEStorageCache {
             }
 
             this.voidExcess = !this.voidExcess;
-            BlockStorage.addBlockInfo(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
+            SlimefunBlockCompat.setData(this.menu.getLocation(), VOID_EXCESS, this.voidExcess ? "true" : null);
             if (item != null) {
                 ItemMeta itemMeta = item.getItemMeta();
                 List<Component> lore = itemMeta.lore() == null
@@ -145,7 +145,7 @@ public final class IEStorageCache {
         });
 
         // interact handler
-        menu.addMenuClickHandler(INTERACT_SLOT, (p, slot, item, action) -> {
+        LegacyMenuCompat.addClickHandler(menu, INTERACT_SLOT, (p, slot, item, action) -> {
             if (!persistentStateSafe) {
                 p.sendMessage(Component.text("This storage unit is frozen because its persisted state needs recovery.", NamedTextColor.RED));
                 return false;
@@ -309,9 +309,8 @@ public final class IEStorageCache {
     }
 
     void reloadData() {
-        Config config = BlockStorage.getLocationInfo(this.menu.getLocation());
-        String stored = config == null ? null : config.getString(STORED_AMOUNT);
-        this.voidExcess = config != null && "true".equals(config.getString(VOID_EXCESS));
+        String stored = SlimefunBlockCompat.getData(this.menu.getLocation(), STORED_AMOUNT);
+        this.voidExcess = "true".equals(SlimefunBlockCompat.getData(this.menu.getLocation(), VOID_EXCESS));
         this.persistentStateSafe = true;
         this.persistentStateProblem = null;
 
@@ -441,7 +440,7 @@ public final class IEStorageCache {
         output();
 
         // store amount
-        BlockStorage.addBlockInfo(this.menu.getLocation(), STORED_AMOUNT, String.valueOf(this.amount));
+        SlimefunBlockCompat.setData(this.menu.getLocation(), STORED_AMOUNT, String.valueOf(this.amount));
 
         // status
         if (this.menu.hasViewer()) {
@@ -457,10 +456,11 @@ public final class IEStorageCache {
                 || checkWallSign(check = block.getRelative(0, 0, -1), block)
         ) {
             Sign sign = (Sign) check.getState();
-            sign.setLine(0, this.signDisplay[0]);
-            sign.setLine(1, this.signDisplay[1]);
-            sign.setLine(2, LEGACY_GRAY + "------------");
-            sign.setLine(3, LEGACY_YELLOW + this.amount);
+            var front = sign.getSide(Side.FRONT);
+            front.line(0, LEGACY_SECTION.deserialize(this.signDisplay[0]));
+            front.line(1, LEGACY_SECTION.deserialize(this.signDisplay[1]));
+            front.line(2, LEGACY_SECTION.deserialize(LEGACY_GRAY + "------------"));
+            front.line(3, LEGACY_SECTION.deserialize(LEGACY_YELLOW + this.amount));
             sign.update();
         }
     }

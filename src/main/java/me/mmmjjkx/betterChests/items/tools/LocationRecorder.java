@@ -10,7 +10,7 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.data.persistent.Persis
 import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction;
 import me.mmmjjkx.betterChests.BCGroups;
 import me.mmmjjkx.betterChests.BetterChests;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
+import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -108,7 +108,7 @@ public class LocationRecorder extends SimpleSlimefunItem<ItemUseHandler> impleme
                         return;
                     }
 
-                    BlockMenu menu = BlockStorage.getInventory(loc);
+                    BlockMenu menu = SlimefunBlockCompat.getBlockMenu(loc);
                     if (menu != null) {
                         menu.open(p);
                     } else {

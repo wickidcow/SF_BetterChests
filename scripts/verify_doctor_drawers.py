@@ -28,6 +28,14 @@ def reject(value: bool, message: str) -> None:
 
 storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
 doctor = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/BetterChestsDoctor.java")
+simple_drawer = read("src/main/java/me/mmmjjkx/betterChests/items/chests/SimpleDrawer.java")
+drawer_storage = read("src/main/java/me/mmmjjkx/betterChests/storage/DrawerStorage.java")
+compat = read("src/main/java/me/mmmjjkx/betterChests/compat/SlimefunBlockCompat.java")
+simple_chest = read("src/main/java/me/mmmjjkx/betterChests/items/chests/SimpleChest.java")
+ie_cache = read("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageCache.java")
+ie_unit = read("src/main/java/me/mmmjjkx/betterChests/items/chests/ie/IEStorageUnit.java")
+chest_colorer = read("src/main/java/me/mmmjjkx/betterChests/items/tools/ChestColorer.java")
+location_recorder = read("src/main/java/me/mmmjjkx/betterChests/items/tools/LocationRecorder.java")
 bridge = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/LegacyDoctorBridge.java")
 ie_inspector = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/IEStorageDoctorInspector.java")
 storage_compat = read("src/main/java/me/mmmjjkx/betterChests/diagnostics/SlimefunBlockDataCompat.java")
@@ -52,8 +60,23 @@ require('world.getLoadedChunks()' in doctor,
         "BetterChests Doctor must scan only already-loaded chunks")
 require('chunk.getTileEntities()' in doctor,
         "BetterChests Doctor must inspect already-loaded tile entities")
-require('BlockStorage.check(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
-        "Doctor scan must remain scoped to registered BetterChests drawer blocks")
+require('SlimefunBlockCompat.getSlimefunItem(block)' in doctor and 'slimefunItem instanceof SimpleDrawer' in doctor,
+        "Doctor scan must remain scoped to registered BetterChests drawer blocks through the compatibility reader")
+reject('BlockStorage.' in doctor,
+       "Doctor scan must not call deprecated BlockStorage directly")
+reject(
+        any('BlockStorage.' in source for source in (
+            simple_drawer,
+            drawer_storage,
+            simple_chest,
+            ie_cache,
+            ie_unit,
+            chest_colorer,
+            location_recorder,
+        )),
+        "BetterChests runtime storage paths must not call deprecated BlockStorage directly")
+require('class LegacyAccess' in compat and 'BlockStorage' in compat,
+        "RC-37 BlockStorage fallback must remain isolated inside SlimefunBlockCompat")
 require('DrawerStorage.inspect(block)' in doctor,
         "Doctor scan must classify drawer state read-only before repair")
 require('repair && DrawerStorage.migrateLegacyIfRecoverable(block)' in doctor,
@@ -89,6 +112,13 @@ require('isDataLoaded' in storage_compat and 'loadBlockData' in storage_compat,
         "modern Doctor storage reads must preserve synchronous loaded-data semantics")
 require('LegacyBlockStorageAccess' in storage_compat and '@SuppressWarnings("deprecation")' in storage_compat,
         "RC-37 fallback must remain isolated and explicitly documented")
+
+require('throw new IllegalStateException("No registered Slimefun block data' in compat,
+        "Modern writes without a loaded registered block must fail visibly")
+require('LegacyItemStackCompat.clearToAir(item)' in simple_drawer,
+        "Legacy Cargo must retain the exact in-place AIR mutation")
+require('SlimefunBlockDataCompat.read(block, STORED_AMOUNT)' in ie_inspector,
+        "Main's read-only IE Doctor snapshot boundary must remain")
 
 if ERRORS:
     print("BetterChests Doctor verification failed:")

@@ -6,7 +6,7 @@
 
     <groupId>me.mmmjjkx</groupId>
     <artifactId>BetterChests-Albion</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <packaging>jar</packaging>
 
     <name>BetterChests</name>
@@ -72,6 +72,7 @@
             </resource>
         </resources>
         <plugins>
+            <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.3</version></plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
