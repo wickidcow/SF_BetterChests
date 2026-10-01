@@ -1,0 +1,114 @@
+name: Finish BetterChests storage candidate
+on:
+  push:
+    branches: ['work/finish-storage-draft-20261001']
+    paths: ['.github/workflows/finish-storage-candidate.yml', '.audit/**']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Prepare the source-hash-checked integration
+        run: |
+          python3 .audit/prepare_storage_candidate.py
+          git diff --check
+          python3 scripts/verify_doctor_drawers.py .
+          python3 scripts/verify_ie_storage_safety.py .
+      - name: Build and test against the retained Slimefun API across Paper versions
+        run: |
+          set -euo pipefail
+          for API in 1.21.11-R0.1-SNAPSHOT 26.2.build.129-stable 26.3-rc-3.build.1-alpha; do
+            mvn -B -ntp clean verify -Dpaper.version="$API" 2>&1 | tee "evidence/build-$API.log"
+            mkdir -p "evidence/tests-$API"
+            cp target/surefire-reports/TEST-*.xml "evidence/tests-$API/"
+          done
+      - name: Build with the exact published Legacy 4.1.63 core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p provided dist
+          gh release download v4.1.63 --repo wickidcow/Slimefun-Legacy --pattern Slimefun-Legacy4.1.63.jar --dir provided
+          echo '993b257c54efe19b58cc8f4946d4d39387f7787fe263c9f27123343159344c42  provided/Slimefun-Legacy4.1.63.jar' | sha256sum -c -
+          mvn -B -ntp install:install-file -Dfile=provided/Slimefun-Legacy4.1.63.jar -DgroupId=com.github.Slimefun -DartifactId=Slimefun4 -Dversion=legacy-4.1.63-verified -Dpackaging=jar -DgeneratePom=true
+          mvn -B -ntp clean verify -Dslimefun.version=legacy-4.1.63-verified 2>&1 | tee evidence/build-exact-legacy.log
+          mkdir -p evidence/tests-exact-legacy
+          cp target/surefire-reports/TEST-*.xml evidence/tests-exact-legacy/
+          cp target/SF_BetterChests1.0.3.jar dist/
+      - name: Verify real reports and distributable contents
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, struct, zipfile, xml.etree.ElementTree as ET
+          results={}
+          for directory in pathlib.Path('evidence').glob('tests-*'):
+              suites=[ET.parse(p).getroot() for p in directory.glob('TEST-*.xml')]
+              assert suites,directory
+              assert any(s.get('name','').endswith('SlimefunBlockCompatTest') and int(s.get('tests','0'))==20 for s in suites),directory
+              assert all(int(s.get(k,'0'))==0 for s in suites for k in ('failures','errors','skipped')),directory
+              results[directory.name]={'tests':sum(int(s.get('tests','0')) for s in suites),'failures':0,'errors':0,'skips':0}
+          assert len(results)==4,results
+          with zipfile.ZipFile('dist/SF_BetterChests1.0.3.jar') as z:
+              assert z.testzip() is None
+              names=z.namelist();assert len(names)==len(set(names))
+              count=0
+              for n in names:
+                  assert not n.startswith(('org/junit/','org/mockito/','org/mockbukkit/','be/seeseemelk/mockbukkit/')),n
+                  if n.endswith('.class'):
+                      if n.startswith('META-INF/versions/') and int(n.split('/')[2])>21:continue
+                      data=z.read(n);minor,major=struct.unpack('>HH',data[4:8])
+                      assert data[:4]==b'\xca\xfe\xba\xbe' and major<=65 and minor!=65535,(n,major,minor)
+                      count+=1
+              assert count>0
+          pathlib.Path('evidence/test-and-bytecode-results.json').write_text(json.dumps({'results':results,'java21_classes':count},indent=2))
+          print(results)
+          PY
+      - name: Preserve verified production tree without moving branches or publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zipfile
+          repo=os.environ['GITHUB_REPOSITORY'];assert repo=='wickidcow/SF_BetterChests'
+          meta=json.loads(pathlib.Path('evidence/candidate-files.json').read_text())
+          def api(path,body=None):
+              args=['gh','api',path]
+              if body is not None:args+=['--method','POST','--input','-']
+              result=subprocess.run(args,input=json.dumps(body) if body is not None else None,text=True,capture_output=True,check=True)
+              return json.loads(result.stdout)
+          entries=[]
+          with zipfile.ZipFile('evidence/verified-source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for name,expected in meta['files'].items():
+                  data=pathlib.Path(name).read_bytes()
+                  digest=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest();assert digest==expected,(name,digest)
+                  sha=api('repos/'+repo+'/git/blobs',{'content':base64.b64encode(data).decode(),'encoding':'base64'})['sha'];assert sha==expected
+                  old=subprocess.check_output(['git','ls-tree',meta['base'],'--',name],text=True)
+                  mode=old.split()[0] if old else '100644'
+                  entries.append({'path':name,'mode':mode,'type':'blob','sha':sha});z.write(name,name)
+          base_tree=api('repos/'+repo+'/git/commits/'+meta['base'])['tree']['sha']
+          tree=api('repos/'+repo+'/git/trees',{'base_tree':base_tree,'tree':entries})['sha']
+          jar=pathlib.Path('dist/SF_BetterChests1.0.3.jar')
+          meta.update(tree=tree,jar_sha256=hashlib.sha256(jar.read_bytes()).hexdigest(),tested_core_sha256='993b257c54efe19b58cc8f4946d4d39387f7787fe263c9f27123343159344c42')
+          pathlib.Path('evidence/candidate-tree.json').write_text(json.dumps(meta,indent=2)+'\n')
+          print(json.dumps(meta))
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: betterchests-finished-candidate-evidence
+          path: |
+            evidence/
+            dist/
+          if-no-files-found: error
+          retention-days: 14
