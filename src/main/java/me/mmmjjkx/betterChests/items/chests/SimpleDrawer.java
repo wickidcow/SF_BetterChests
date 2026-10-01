@@ -21,6 +21,7 @@ import me.mmmjjkx.betterChests.storage.DrawerStorage;
 import me.mmmjjkx.betterChests.compat.LegacyInventoryBlock;
 import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
+import me.mmmjjkx.betterChests.compat.LegacyItemStackCompat;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
@@ -655,7 +656,7 @@ public class SimpleDrawer extends SlimefunItem implements NotHopperable, LegacyI
             // stack is best-effort only for legacy integrations.
             try {
                 if (remainder <= 0) {
-                    item.setAmount(0);
+                    LegacyItemStackCompat.clearToAir(item);
                 } else {
                     item.setAmount(remainder);
                 }

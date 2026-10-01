@@ -1,9 +1,9 @@
 package me.mmmjjkx.betterChests.storage;
 
 import me.mmmjjkx.betterChests.BetterChests;
+import me.mmmjjkx.betterChests.utils.LegacyText;
 import me.mmmjjkx.betterChests.utils.MutableItemStacks;
 import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -227,7 +227,7 @@ public final class DrawerStorage {
                     item = MutableItemStacks.copyWithAmount(candidate, 1);
                 }
             } else if (entity instanceof TextDisplay display) {
-                String text = PlainTextComponentSerializer.plainText().serialize(display.text());
+                String text = LegacyText.plain(display.text());
                 long parsed = parseCount(text);
                 if (parsed > count) {
                     count = parsed;

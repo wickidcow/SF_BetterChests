@@ -2,7 +2,6 @@ package me.mmmjjkx.betterChests.diagnostics;
 
 import me.mmmjjkx.betterChests.BetterChests;
 import me.mmmjjkx.betterChests.items.chests.ie.IEStorageUnit;
-import me.mmmjjkx.betterChests.compat.SlimefunBlockCompat;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -21,7 +20,8 @@ final class IEStorageDoctorInspector {
     }
 
     static Result inspect(Block block, IEStorageUnit unit) {
-        String rawAmount = SlimefunBlockCompat.getData(block, STORED_AMOUNT);
+        SlimefunBlockDataCompat.Snapshot snapshot = SlimefunBlockDataCompat.read(block, STORED_AMOUNT);
+        String rawAmount = snapshot.value();
 
         final long amount;
         if (rawAmount == null || rawAmount.isBlank()) {
@@ -32,7 +32,7 @@ final class IEStorageDoctorInspector {
             } catch (NumberFormatException exception) {
                 return new Result(
                         Status.MALFORMED_COUNT,
-                        "IE storage count is malformed; the raw BlockStorage value was left unchanged.");
+                        "IE storage count is malformed; the raw stored value was left unchanged.");
             }
         }
 
@@ -47,7 +47,7 @@ final class IEStorageDoctorInspector {
                     "IE storage count exceeds this unit's capacity; Doctor did not clamp or overwrite it.");
         }
 
-        BlockMenu menu = SlimefunBlockCompat.getBlockMenu(block);
+        BlockMenu menu = snapshot.menu();
         if (amount == 0L) {
             if (menu == null) {
                 return new Result(Status.HEALTHY_EMPTY, "IE storage is empty; its block menu is not currently available.");

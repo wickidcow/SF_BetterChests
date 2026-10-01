@@ -1,37 +1,32 @@
 package me.mmmjjkx.betterChests.compat;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 
-import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-
-import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Objects;
 
 /**
- * Compatibility access for Slimefun block identity, menus, and persisted key/value data.
- *
- * <p>Modern Slimefun Legacy uses BlockDataController/SlimefunBlockData. The RC-37
- * compatibility floor predates that API, so only those older runtimes use the
- * isolated BlockStorage fallback. Both paths preserve the same existing block
- * keys, menus, and Slimefun item ids.</p>
+ * Preserves the registered block identity, loaded menu and historical metadata keys.
+ * Only reflective method descriptors are cached, never block data or inventory values.
+ * Identity is owned by normal block placement; this adapter only writes metadata.
  */
 public final class SlimefunBlockCompat {
+    private SlimefunBlockCompat() {}
 
-    private static final Access ACCESS = createAccess();
-
-    private SlimefunBlockCompat() {
+    private static final class RuntimeAccess {
+        private static final Access INSTANCE = createAccess(Slimefun.class);
     }
 
     @Nullable
     public static SlimefunItem getSlimefunItem(@Nonnull Block block) {
-        return ACCESS.getSlimefunItem(block);
+        return RuntimeAccess.INSTANCE.getSlimefunItem(block);
     }
 
     @Nullable
@@ -41,7 +36,7 @@ public final class SlimefunBlockCompat {
 
     @Nullable
     public static BlockMenu getBlockMenu(@Nonnull Location location) {
-        return ACCESS.getBlockMenu(location);
+        return RuntimeAccess.INSTANCE.getBlockMenu(location);
     }
 
     @Nullable
@@ -51,225 +46,146 @@ public final class SlimefunBlockCompat {
 
     @Nullable
     public static String getData(@Nonnull Location location, @Nonnull String key) {
-        return ACCESS.getData(location, key);
+        return RuntimeAccess.INSTANCE.getData(location, key);
     }
 
     public static void setData(@Nonnull Block block, @Nonnull String key, @Nullable String value) {
         setData(block.getLocation(), key, value);
     }
 
+    /** Refuses missing/unreadable blocks instead of accepting an unpersisted write. */
     public static void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
-        ACCESS.setData(location, key, value);
+        RuntimeAccess.INSTANCE.setData(location, key, value);
     }
 
-    @Nonnull
-    private static Access createAccess() {
+    // Package-private resolution seam: tests exercise the actual reflective adapter.
+    static Access createAccess(Class<?> api) {
+        final Method database;
         try {
-            Method getDatabaseManager = Slimefun.class.getMethod("getDatabaseManager");
-            Method getBlockDataController = getDatabaseManager.getReturnType().getMethod("getBlockDataController");
-            Class<?> controllerType = getBlockDataController.getReturnType();
-            Method getBlockData = controllerType.getMethod("getBlockData", Location.class);
-            Class<?> blockDataType = getBlockData.getReturnType();
-            Method loadBlockData = controllerType.getMethod("loadBlockData", blockDataType);
-            Method isDataLoaded = blockDataType.getMethod("isDataLoaded");
-            Method getSfId = blockDataType.getMethod("getSfId");
-            Method getData = blockDataType.getMethod("getData", String.class);
-            Method setData = blockDataType.getMethod("setData", String.class, String.class);
-            Method removeData = blockDataType.getMethod("removeData", String.class);
-            Method getBlockMenu = blockDataType.getMethod("getBlockMenu");
-
-            return new ModernAccess(
-                    getDatabaseManager,
-                    getBlockDataController,
-                    getBlockData,
-                    loadBlockData,
-                    isDataLoaded,
-                    getSfId,
-                    getData,
-                    setData,
-                    removeData,
-                    getBlockMenu);
-        } catch (NoSuchMethodException | LinkageError ignored) {
+            database = api.getMethod("getDatabaseManager");
+        } catch (NoSuchMethodException absent) {
             return new LegacyAccess();
+        }
+        try {
+            return new ModernAccess(database);
+        } catch (NoSuchMethodException incompatible) {
+            throw new IllegalStateException("Incomplete Slimefun block-data API; refusing unsafe fallback", incompatible);
         }
     }
 
-    private interface Access {
-        @Nullable
-        SlimefunItem getSlimefunItem(@Nonnull Block block);
-
-        @Nullable
-        BlockMenu getBlockMenu(@Nonnull Location location);
-
-        @Nullable
-        String getData(@Nonnull Location location, @Nonnull String key);
-
-        void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value);
+    interface Access {
+        SlimefunItem getSlimefunItem(Block block);
+        BlockMenu getBlockMenu(Location location);
+        String getData(Location location, String key);
+        void setData(Location location, String key, String value);
     }
 
     private static final class ModernAccess implements Access {
+        private final Method database, controller, blockData, load, loaded, id, get, set, remove, menu;
 
-        private final Method getDatabaseManager;
-        private final Method getBlockDataController;
-        private final Method getBlockData;
-        private final Method loadBlockData;
-        private final Method isDataLoaded;
-        private final Method getSfId;
-        private final Method getData;
-        private final Method setData;
-        private final Method removeData;
-        private final Method getBlockMenu;
+        private ModernAccess(Method database) throws NoSuchMethodException {
+            this.database = database;
+            controller = database.getReturnType().getMethod("getBlockDataController");
+            Class<?> controllerType = controller.getReturnType();
+            blockData = controllerType.getMethod("getBlockData", Location.class);
+            Class<?> dataType = blockData.getReturnType();
+            load = controllerType.getMethod("loadBlockData", dataType);
+            loaded = dataType.getMethod("isDataLoaded");
+            id = dataType.getMethod("getSfId");
+            get = dataType.getMethod("getData", String.class);
+            set = dataType.getMethod("setData", String.class, String.class);
+            remove = dataType.getMethod("removeData", String.class);
+            menu = dataType.getMethod("getBlockMenu");
+        }
 
-        private ModernAccess(
-                Method getDatabaseManager,
-                Method getBlockDataController,
-                Method getBlockData,
-                Method loadBlockData,
-                Method isDataLoaded,
-                Method getSfId,
-                Method getData,
-                Method setData,
-                Method removeData,
-                Method getBlockMenu) {
-            this.getDatabaseManager = getDatabaseManager;
-            this.getBlockDataController = getBlockDataController;
-            this.getBlockData = getBlockData;
-            this.loadBlockData = loadBlockData;
-            this.isDataLoaded = isDataLoaded;
-            this.getSfId = getSfId;
-            this.getData = getData;
-            this.setData = setData;
-            this.removeData = removeData;
-            this.getBlockMenu = getBlockMenu;
+        private Object getLoadedData(Location location) {
+            Objects.requireNonNull(location, "location");
+            Object currentController = call(controller, call(database, null));
+            Object data = call(blockData, currentController, location);
+            if (data != null && !Boolean.TRUE.equals(call(loaded, data))) {
+                call(load, currentController, data);
+                if (!Boolean.TRUE.equals(call(loaded, data))) {
+                    throw new IllegalStateException("Slimefun block data remains unreadable at " + location);
+                }
+            }
+            return data;
         }
 
         @Override
-        @Nullable
-        public SlimefunItem getSlimefunItem(@Nonnull Block block) {
+        public SlimefunItem getSlimefunItem(Block block) {
             Object data = getLoadedData(block.getLocation());
-            if (data == null) {
-                return null;
-            }
-            try {
-                return SlimefunItem.getById((String) getSfId.invoke(data));
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Could not access Slimefun Legacy block id", exception);
-            } catch (InvocationTargetException exception) {
-                throw rethrow("Slimefun Legacy block id lookup failed", exception);
-            }
+            String key = data == null ? null : (String) call(id, data);
+            return key == null ? null : SlimefunItem.getById(key);
         }
 
         @Override
-        @Nullable
-        public BlockMenu getBlockMenu(@Nonnull Location location) {
+        public BlockMenu getBlockMenu(Location location) {
             Object data = getLoadedData(location);
-            if (data == null) {
-                return null;
-            }
-            try {
-                return (BlockMenu) getBlockMenu.invoke(data);
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Could not access Slimefun Legacy block menu", exception);
-            } catch (InvocationTargetException exception) {
-                throw rethrow("Slimefun Legacy block menu lookup failed", exception);
-            }
+            return data == null ? null : (BlockMenu) call(menu, data);
         }
 
         @Override
-        @Nullable
-        public String getData(@Nonnull Location location, @Nonnull String key) {
+        public String getData(Location location, String key) {
+            Objects.requireNonNull(key, "key");
             Object data = getLoadedData(location);
-            if (data == null) {
-                return null;
-            }
-            try {
-                return (String) getData.invoke(data, key);
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Could not access Slimefun Legacy block data", exception);
-            } catch (InvocationTargetException exception) {
-                throw rethrow("Slimefun Legacy block data lookup failed", exception);
-            }
+            if (data == null) return null;
+            return (String) ("id".equals(key) ? call(id, data) : call(get, data, key));
         }
 
         @Override
-        public void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
+        public void setData(Location location, String key, String value) {
+            requireMetadataKey(key);
             Object data = getLoadedData(location);
             if (data == null) {
-                return;
+                throw new IllegalStateException("No registered Slimefun block data at " + location);
             }
-            try {
-                if (value == null) {
-                    removeData.invoke(data, key);
-                } else {
-                    setData.invoke(data, key, value);
-                }
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Could not update Slimefun Legacy block data", exception);
-            } catch (InvocationTargetException exception) {
-                throw rethrow("Slimefun Legacy block data update failed", exception);
-            }
-        }
-
-        @Nullable
-        private Object getLoadedData(@Nonnull Location location) {
-            try {
-                Object databaseManager = getDatabaseManager.invoke(null);
-                Object controller = getBlockDataController.invoke(databaseManager);
-                Object data = getBlockData.invoke(controller, location);
-                if (data != null && !((Boolean) isDataLoaded.invoke(data))) {
-                    loadBlockData.invoke(controller, data);
-                }
-                return data;
-            } catch (IllegalAccessException exception) {
-                throw new IllegalStateException("Could not access Slimefun Legacy block-data controller", exception);
-            } catch (InvocationTargetException exception) {
-                throw rethrow("Slimefun Legacy block-data lookup failed", exception);
-            }
+            if (value == null) call(remove, data, key);
+            else call(set, data, key, value);
         }
     }
 
-    /**
-     * Intentional compatibility boundary for the upstream RC-37 API floor.
-     * Modern Slimefun Legacy never selects this implementation.
-     */
+    private static void requireMetadataKey(String key) {
+        Objects.requireNonNull(key, "key");
+        if ("id".equals(key)) {
+            throw new IllegalArgumentException("Block identity must be changed through normal Slimefun placement");
+        }
+    }
+
+    private static Object call(Method method, Object target, Object... args) {
+        try {
+            return method.invoke(target, args);
+        } catch (IllegalAccessException inaccessible) {
+            throw new IllegalStateException("Cannot access Slimefun block-data API", inaccessible);
+        } catch (InvocationTargetException failed) {
+            Throwable cause = failed.getCause();
+            if (cause instanceof RuntimeException runtime) throw runtime;
+            if (cause instanceof Error error) throw error;
+            throw new IllegalStateException("Slimefun block-data operation failed", cause);
+        }
+    }
+
+    /** The original RC-37 ABI is deliberately retained only at this boundary. */
     @SuppressWarnings("deprecation")
     private static final class LegacyAccess implements Access {
-
         @Override
-        @Nullable
-        public SlimefunItem getSlimefunItem(@Nonnull Block block) {
+        public SlimefunItem getSlimefunItem(Block block) {
             return me.mrCookieSlime.Slimefun.api.BlockStorage.check(block);
         }
-
         @Override
-        @Nullable
-        public BlockMenu getBlockMenu(@Nonnull Location location) {
+        public BlockMenu getBlockMenu(Location location) {
             return me.mrCookieSlime.Slimefun.api.BlockStorage.getInventory(location);
         }
-
         @Override
-        @Nullable
-        public String getData(@Nonnull Location location, @Nonnull String key) {
+        public String getData(Location location, String key) {
             return me.mrCookieSlime.Slimefun.api.BlockStorage.getLocationInfo(location, key);
         }
-
         @Override
-        public void setData(@Nonnull Location location, @Nonnull String key, @Nullable String value) {
+        public void setData(Location location, String key, String value) {
+            requireMetadataKey(key);
+            if (!me.mrCookieSlime.Slimefun.api.BlockStorage.hasBlockInfo(location)) {
+                throw new IllegalStateException("No registered Slimefun block data at " + location);
+            }
             me.mrCookieSlime.Slimefun.api.BlockStorage.addBlockInfo(location, key, value);
         }
-    }
-
-    @Nonnull
-    private static RuntimeException rethrow(
-            @Nonnull String message,
-            @Nonnull InvocationTargetException exception) {
-        Throwable cause = exception.getCause();
-        if (cause instanceof RuntimeException runtimeException) {
-            return runtimeException;
-        }
-        if (cause instanceof Error error) {
-            throw error;
-        }
-        return new IllegalStateException(message, cause);
     }
 }

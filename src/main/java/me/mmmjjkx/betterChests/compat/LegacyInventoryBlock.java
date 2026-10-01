@@ -1,12 +1,13 @@
 package me.mmmjjkx.betterChests.compat;
 
 /**
- * Compatibility bridge for Slimefun's legacy inventory/cargo contract.
+ * Compatibility boundary for Slimefun's legacy cargo inventory contract.
  *
- * <p>Slimefun currently deprecates InventoryBlock for addons but does not yet
- * provide a replacement contract. Extending it here preserves cargo and menu
- * type checks without suppressing deprecation warnings across whole machine
- * classes.</p>
+ * <p>Slimefun still consumes InventoryBlock for classic Cargo interoperability,
+ * but the interface is deprecated because the inventory system is intended to
+ * be replaced. BetterChests must keep implementing that ABI until a supported
+ * replacement exists, so the deprecated type is isolated here rather than
+ * suppressed across the actual drawer implementations.</p>
  */
 @SuppressWarnings("deprecation")
 public interface LegacyInventoryBlock
