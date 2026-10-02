@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require unchanged merged source and successful normal build before dispatch
+      - name: Require unchanged merged source and successful main build before dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -24,13 +24,12 @@ jobs:
           assert read(repo+'/git/ref/heads/main')['object']['sha']==expected
           pr=read(repo+'/pulls/8')
           assert pr['merged'] and pr['merge_commit_sha']==expected and pr['head']['sha']=='5c830e845d2849e0d8aea53414be8cba80af6775'
-          runs=read(repo+'/actions/runs?head_sha='+expected+'&event=push&per_page=100')['workflow_runs']
-          builds=[r for r in runs if r['path']=='.github/workflows/build.yml']
-          assert builds and max(builds,key=lambda r:r['id'])['conclusion']=='success',builds
+          runs=read(repo+'/actions/runs?head_sha='+expected+'&event=push&branch=main&per_page=100')['workflow_runs']
+          builds=[r for r in runs if r['path']=='.github/workflows/build.yml' and r['head_branch']=='main']
+          assert builds and max(builds,key=lambda r:r['id'])['conclusion']=='success',[(r['id'],r['conclusion']) for r in builds]
           releases=read(repo+'/releases?per_page=100')
           assert not any(r['tag_name']=='v1.0.3' for r in releases),'Already published; inspect existing assets instead of overwriting'
-          # Use the repository's unchanged build/test/runtime/publication workflow.
-          # This helper does not build, upload assets, create tags or bypass its gates.
+          # Delegate to unchanged build/test/runtime/publication gates on reviewed main.
           subprocess.run(['gh','api','--method','POST',repo+'/actions/workflows/build.yml/dispatches','-f','ref=main'],check=True)
           print('Requested gated build.yml on reviewed main '+expected+'. Publication is not yet confirmed.')
           PY
