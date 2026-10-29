@@ -38,6 +38,8 @@ jobs:
           test "$PROJECT_VERSION" = "$VERSION"
       - name: Verify Doctor drawer migration safety
         run: python3 scripts/verify_doctor_drawers.py .
+      - name: Test immutable release policy (no GitHub writes)
+        run: python3 -m unittest discover -s scripts -p 'test_publish_immutable_release.py' -v
       - name: Build release JAR against Paper 1.21.11 baseline
         run: mvn --batch-mode --update-snapshots clean package
       - name: Stage versioned JAR
@@ -149,9 +151,10 @@ jobs:
   release:
     name: Publish canonical raw JAR release asset
     needs: [build, runtime-test]
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
       - name: Prepare release directory
         run: mkdir -p dist/_artifact
       - name: Download validated JAR
@@ -168,21 +171,8 @@ jobs:
           mv "$DOWNLOADED" "dist/${OUTPUT_NAME}"
           rm -rf dist/_artifact
           test -s "dist/${OUTPUT_NAME}"
-      - name: Publish canonical raw JAR release asset
+      - name: Publish distinct manually approved immutable release only
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${VERSION}"; fi
-          JAR="dist/${OUTPUT_NAME}"
-          test -s "$JAR"
-          unzip -tqq "$JAR"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            while IFS= read -r OLD; do
-              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y; fi
-            done < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-            gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_BetterChests ${VERSION}" --notes "BetterChests ${VERSION}: canonical ${OUTPUT_NAME} release."
-          fi
+        run: bash scripts/publish_immutable_release.sh
