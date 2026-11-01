@@ -16,6 +16,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Install checksum-verified Apache Maven 3.10.0
+        run: bash scripts/install_maven_3_10.sh
       - name: Verify IE storage fail-closed invariants
         run: python3 scripts/verify_ie_storage_safety.py .
       - name: Compile BetterChests
